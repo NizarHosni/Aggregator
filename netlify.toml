@@ -1,0 +1,13 @@
+# Netlify configuration
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Environment variables should be set in Netlify dashboard:
+# VITE_API_URL=https://your-backend-url.com/api
+
