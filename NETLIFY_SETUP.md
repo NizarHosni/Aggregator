@@ -39,7 +39,17 @@ Your frontend is deployed to Netlify but it's trying to connect to `localhost:30
    - **Build Command**: `npm install`
    - **Start Command**: `npm run start:server`
    - **Environment**: Node
-6. Add environment variables (same as Railway above)
+6. Add environment variables - click "Add Environment Variable" for each:
+   
+   **Important**: Add each variable separately with Key and Value fields
+   
+   - **Key**: `DATABASE_URL` | **Value**: `your_neon_database_url`
+   - **Key**: `JWT_SECRET` | **Value**: `your-random-secret-key`
+   - **Key**: `OPENAI_API_KEY` | **Value**: `sk-proj-...` (just the value, no quotes)
+   - **Key**: `GOOGLE_PLACES_API_KEY` | **Value**: `AIza...`
+   - **Key**: `PORT` | **Value**: `3001`
+   - **Key**: `ALLOWED_ORIGINS` | **Value**: `https://aiaggregator.netlify.app,http://localhost:5173`
+   - **Key**: `NODE_ENV` | **Value**: `production`
 7. Click "Create Web Service"
 8. Render will give you a URL like: `https://your-app-name.onrender.com`
 9. **Copy this URL** - you'll need it for Step 2
