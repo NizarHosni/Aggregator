@@ -277,23 +277,45 @@ Only return valid JSON, no other text.`;
     }
 
     // Only return real doctors - no mock data or ChatGPT fallback
-    // If no doctors found and we have a location, we already returned helpful suggestions above
-    // If no location specified, return empty results with a message
-    if (physicians.length === 0 && !location) {
-      return res.status(200).json({
-        query,
-        specialty,
-        location: null,
-        results: [],
-        resultsCount: 0,
-        error: null,
-        suggestions: [
-          'Please specify a location in your search (e.g., "Retina Surgeons in Tacoma")',
-          'We only return real doctors from verified sources',
-          'Try searching with a city name to find doctors in that area',
-        ],
-        searchRadius: null,
-      });
+    // If no doctors found, always return with helpful suggestions
+    if (physicians.length === 0) {
+      if (location) {
+        // Location was specified but no doctors found
+        const radiusKm = searchRadius / 1000;
+        return res.status(200).json({
+          query,
+          specialty,
+          location: locationData || location,
+          results: [],
+          resultsCount: 0,
+          error: null,
+          suggestions: [
+            `No ${specialty} doctors found within ${radiusKm}km of ${location}`,
+            `Try expanding your search radius (currently ${radiusKm}km)`,
+            `Try searching in a nearby larger city (e.g., "Houston, TX" or "Dallas, TX" instead of just "Texas")`,
+            `Try a more general specialty term (e.g., "Cardiologist" instead of "Heart Surgeon")`,
+            `Try a different city or location`,
+          ],
+          searchRadius: searchRadius,
+        });
+      } else {
+        // No location specified
+        return res.status(200).json({
+          query,
+          specialty,
+          location: null,
+          results: [],
+          resultsCount: 0,
+          error: null,
+          suggestions: [
+            'Please specify a location in your search (e.g., "Heart Surgeons in Houston, TX")',
+            'We only return real doctors from verified sources - location is required',
+            'Try searching with a specific city name to find doctors in that area',
+            'Examples: "Cardiologists in Dallas, TX" or "Heart Surgeons in Austin, Texas"',
+          ],
+          searchRadius: null,
+        });
+      }
     }
 
     const resultsCount = physicians.length;
