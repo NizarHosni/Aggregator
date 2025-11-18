@@ -43,7 +43,7 @@ Return a JSON object with:
 Only return valid JSON, no other text.`;
 
       const extractionResponse = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: 'o4-mini-deep-research',
         messages: [
           {
             role: 'system',
@@ -143,7 +143,7 @@ For each physician, provide:
 Return as a JSON array of objects. Only return the JSON array, no other text.`;
 
       const searchResponse = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: 'o4-mini-deep-research',
         messages: [
           {
             role: 'system',
