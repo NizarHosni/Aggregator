@@ -21,27 +21,42 @@ const DEFAULT_PORT = 3001;
 const PORT = process.env.PORT || DEFAULT_PORT;
 
 // Configure CORS to allow multiple origins
-const allowedOrigins = process.env.ALLOWED_ORIGINS
+const defaultOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://yodoc.netlify.app',
+];
+
+const envOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-  : [
-      'http://localhost:5173',
-      'http://localhost:3000',
-      'https://yodoc.netlify.app',
-    ];
+  : [];
+
+// Merge default origins with environment origins, removing duplicates
+const allowedOrigins = [...new Set([...defaultOrigins, ...envOrigins])];
+
+// Log allowed origins on startup
+console.log('🌐 CORS Configuration:');
+console.log('   Allowed origins:', allowedOrigins);
+console.log('   NODE_ENV:', process.env.NODE_ENV || 'not set');
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+    if (!origin) {
+      console.log('⚠️  CORS: Request with no origin - allowing');
+      return callback(null, true);
+    }
     
     // Check if origin is in allowed list
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else if (process.env.NODE_ENV === 'development') {
       // In development, allow all origins
+      console.log(`✅ CORS: Development mode - allowing origin: ${origin}`);
       callback(null, true);
     } else {
-      console.warn(`CORS blocked origin: ${origin}. Allowed origins:`, allowedOrigins);
+      console.warn(`❌ CORS blocked origin: ${origin}`);
+      console.warn(`   Allowed origins:`, allowedOrigins);
       callback(new Error(`Not allowed by CORS: ${origin}`));
     }
   },
