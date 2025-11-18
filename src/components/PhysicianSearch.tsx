@@ -31,11 +31,34 @@ export function PhysicianSearch() {
       );
 
       // Display results
-      const resultsText = results.results
-        .map((p, i) => `${i + 1}. ${p.name} - ${p.specialty}\n   ${p.location} | ${p.phone} | ⭐ ${p.rating}/5`)
-        .join('\n\n');
+      let displayMessage = '';
+      
+      if (results.resultsCount === 0) {
+        // Format a user-friendly message for no results
+        displayMessage = `SEARCH RESULTS\n${'='.repeat(60)}\n\n`;
+        displayMessage += `No physicians found matching: "${query}"\n\n`;
+        displayMessage += `SUGGESTIONS TO IMPROVE YOUR SEARCH:\n`;
+        displayMessage += `• Try using more general terms (e.g., "cardiologist" instead of a specific name)\n`;
+        displayMessage += `• Check the spelling of the specialty or location\n`;
+        displayMessage += `• Try a nearby city or broader geographic area\n`;
+        displayMessage += `• Search by specialty only (e.g., "dermatologist")\n`;
+        displayMessage += `• Remove specific doctor names and search by practice type\n\n`;
+        displayMessage += `EXAMPLE SEARCHES THAT WORK WELL:\n`;
+        displayMessage += `• "Retina Surgeons in Tacoma"\n`;
+        displayMessage += `• "Orthopedic specialists near Seattle"\n`;
+        displayMessage += `• "Primary care physician in Boston"\n`;
+        displayMessage += `• "Cardiologists in Los Angeles"\n\n`;
+        displayMessage += `${'='.repeat(60)}\n`;
+        displayMessage += `This message can be copied and pasted for your records.`;
+      } else {
+        // Format regular results
+        const resultsText = results.results
+          .map((p, i) => `${i + 1}. ${p.name} - ${p.specialty}\n   ${p.location} | ${p.phone} | ⭐ ${p.rating}/5`)
+          .join('\n\n');
+        displayMessage = `Found ${results.resultsCount} physicians matching "${query}":\n\n${resultsText}`;
+      }
 
-      alert(`Found ${results.resultsCount} physicians matching "${query}":\n\n${resultsText}`);
+      alert(displayMessage);
 
       setQuery('');
       setShowHistory(true);
