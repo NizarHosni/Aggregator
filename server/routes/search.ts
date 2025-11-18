@@ -251,28 +251,8 @@ Only return valid JSON, no other text.`;
           'Check the spelling of the city or location name',
           'Try using a more specific location (e.g., "Seattle, WA" instead of just "Seattle")',
           'Use the full city and state name for better results',
+          'Try a different city or location',
         ],
-      });
-    }
-
-    // Return helpful message if no doctors found
-    if (noDoctorsFound && location) {
-      const radiusKm = searchRadius / 1000;
-      return res.status(200).json({
-        query,
-        specialty,
-        location: locationData || location,
-        results: [],
-        resultsCount: 0,
-        error: null,
-        suggestions: [
-          `No ${specialty} doctors found within ${radiusKm}km of ${location}`,
-          `Try expanding your search radius (currently ${radiusKm}km)`,
-          `Try searching in a nearby larger city`,
-          `Try a more general specialty term (e.g., "Cardiologist" instead of "Interventional Cardiologist")`,
-          `Remove the location to see all available ${specialty} doctors`,
-        ],
-        searchRadius: searchRadius,
       });
     }
 
