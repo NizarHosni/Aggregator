@@ -31,11 +31,21 @@ export function PhysicianSearch() {
       );
 
       // Display results
-      const resultsText = results.results
-        .map((p, i) => `${i + 1}. ${p.name} - ${p.specialty}\n   ${p.location} | ${p.phone} | ⭐ ${p.rating}/5`)
-        .join('\n\n');
+      let message: string;
+      
+      if (results.resultsCount === 0) {
+        // Format a user-friendly "no results" message that can be copied
+        message = `SEARCH RESULTS\n${'='.repeat(60)}\n\nNo physicians found matching: "${query}"\n\nSUGGESTIONS TO IMPROVE YOUR SEARCH:\n\n• Try using broader search terms\n  Example: Instead of "pediatric cardiologist", try "cardiologist"\n\n• Check your spelling\n  Make sure the specialty or location is spelled correctly\n\n• Try a different location\n  Example: Search for nearby cities or states\n\n• Use common specialty names\n  Examples: Cardiology, Dermatology, Orthopedics, Primary Care\n\n• Search without location first\n  Then narrow down based on results\n\nEXAMPLE SEARCHES:\n• "Cardiologist in Seattle"\n• "Dermatologist near Miami"\n• "Orthopedic surgeon in Texas"\n• "Primary care doctor in Chicago"\n\n${'='.repeat(60)}`;
+      } else {
+        // Format regular results
+        const resultsText = results.results
+          .map((p, i) => `${i + 1}. ${p.name} - ${p.specialty}\n   ${p.location} | ${p.phone} | ⭐ ${p.rating}/5`)
+          .join('\n\n');
+        
+        message = `SEARCH RESULTS\n${'='.repeat(60)}\n\nFound ${results.resultsCount} physician${results.resultsCount > 1 ? 's' : ''} matching "${query}":\n\n${resultsText}\n\n${'='.repeat(60)}`;
+      }
 
-      alert(`Found ${results.resultsCount} physicians matching "${query}":\n\n${resultsText}`);
+      alert(message);
 
       setQuery('');
       setShowHistory(true);
