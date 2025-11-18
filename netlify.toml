@@ -6,12 +6,11 @@
 [build.environment]
   SECRETS_SCAN_OMIT_KEYS = "PORT,CLIENT_URL"
   SECRETS_SCAN_OMIT_PATHS = "render.yaml,railway.json,server/**,dist/**"
+  VITE_API_URL = "https://physician-search-api-production.up.railway.app"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
-# Environment variables should be set in Netlify dashboard:
-# VITE_API_URL=https://your-backend-url.com/api
 

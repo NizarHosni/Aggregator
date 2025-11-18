@@ -1,13 +1,19 @@
 // Default API URL for local development
 const DEFAULT_API_URL = 'http://localhost:3001/api';
 
+// Check if we should use Netlify function proxy (in production on Netlify)
+const USE_PROXY = import.meta.env.PROD && typeof window !== 'undefined' && window.location.hostname.includes('netlify.app');
+
 // Get API URL from environment and ensure it doesn't have trailing slash
 // If VITE_API_URL doesn't end with /api, add it
 let envApiUrl = import.meta.env.VITE_API_URL || DEFAULT_API_URL;
 envApiUrl = envApiUrl.endsWith('/') ? envApiUrl.slice(0, -1) : envApiUrl;
 
 // Ensure the URL ends with /api
-const API_URL = envApiUrl.endsWith('/api') ? envApiUrl : `${envApiUrl}/api`;
+const BACKEND_API_URL = envApiUrl.endsWith('/api') ? envApiUrl : `${envApiUrl}/api`;
+
+// Use Netlify function proxy in production, direct API in development
+const API_URL = USE_PROXY ? '/.netlify/functions/api-proxy' : BACKEND_API_URL;
 
 // Debug: Log API URL in development
 if (import.meta.env.DEV) {
@@ -45,7 +51,16 @@ async function apiRequest<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
+  // If using proxy, add path as query parameter
+  let url: string;
+  if (USE_PROXY) {
+    // For proxy, add the endpoint path as a query parameter
+    url = `${API_URL}?path=${encodeURIComponent(endpoint)}`;
+  } else {
+    url = `${API_URL}${endpoint}`;
+  }
+
+  const response = await fetch(url, {
     ...options,
     headers,
   });

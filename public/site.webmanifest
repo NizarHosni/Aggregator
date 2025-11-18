@@ -1,0 +1,16 @@
+{
+  "name": "AI Physician Search Platform",
+  "short_name": "YoDoc",
+  "description": "Search for physicians using AI-powered natural language queries",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "theme_color": "#2563eb",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}
+
