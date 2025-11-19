@@ -109,20 +109,5 @@
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>
-    <!-- Optimize CSS loading - Vite will handle this during build -->
-    <script>
-      // Remove loading spinner once React loads
-      window.addEventListener('load', function() {
-        var root = document.getElementById('root');
-        if (root && root.children.length > 0 && root.children[0].classList.contains('loading-spinner')) {
-          // React will replace this, but ensure smooth transition
-          root.style.opacity = '0';
-          setTimeout(function() {
-            root.style.transition = 'opacity 0.3s';
-            root.style.opacity = '1';
-          }, 100);
-        }
-      });
-    </script>
   </body>
 </html>
