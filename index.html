@@ -4,31 +4,81 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://yodoc.netlify.app/" />
+    
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/favicon.svg" />
     <link rel="manifest" href="/site.webmanifest" />
     
     <!-- Primary Meta Tags -->
-    <title>AI Physician Search Platform - Find Doctors Near You</title>
-    <meta name="title" content="AI Physician Search Platform - Find Doctors Near You" />
-    <meta name="description" content="Search for physicians using AI-powered natural language queries. Find the right doctor by specialty, location, or name with intelligent search technology." />
+    <title>Find Doctors Near You - Real Phone Numbers & Reviews | YoDoc</title>
+    <meta name="title" content="Find Doctors Near You - Real Phone Numbers & Reviews | YoDoc" />
+    <meta name="description" content="Find real doctors with phone numbers, addresses, and ratings. Search by name, specialty, and location. Contact healthcare providers directly. Verified US healthcare provider database." />
+    <meta name="keywords" content="find doctors, doctor search, physicians near me, healthcare providers, doctor phone numbers, medical specialists, find doctors near me, doctor directory, physician directory, medical professionals, healthcare directory" />
+    <meta name="author" content="YoDoc" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="googlebot" content="index, follow" />
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://yodoc.netlify.app/" />
-    <meta property="og:title" content="AI Physician Search Platform - Find Doctors Near You" />
-    <meta property="og:description" content="Search for physicians using AI-powered natural language queries. Find the right doctor by specialty, location, or name with intelligent search technology." />
-    <!-- Note: Add an og-image.png (1200x630px) to public/ folder for custom preview image -->
-    <!-- For now using a generated image service -->
-    <meta property="og:image" content="https://via.placeholder.com/1200x630/2563eb/ffffff?text=AI+Physician+Search+Platform" />
+    <meta property="og:title" content="Find Doctors Near You - Real Phone Numbers & Reviews | YoDoc" />
+    <meta property="og:description" content="Find real doctors with phone numbers, addresses, and ratings. Search by name, specialty, and location. Contact healthcare providers directly." />
+    <meta property="og:image" content="https://yodoc.netlify.app/favicon.svg" />
+    <meta property="og:site_name" content="YoDoc" />
+    <meta property="og:locale" content="en_US" />
     
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://yodoc.netlify.app/" />
-    <meta name="twitter:title" content="AI Physician Search Platform - Find Doctors Near You" />
-    <meta name="twitter:description" content="Search for physicians using AI-powered natural language queries. Find the right doctor by specialty, location, or name with intelligent search technology." />
-    <meta name="twitter:image" content="https://via.placeholder.com/1200x630/2563eb/ffffff?text=AI+Physician+Search+Platform" />
+    <meta name="twitter:title" content="Find Doctors Near You - Real Phone Numbers & Reviews | YoDoc" />
+    <meta name="twitter:description" content="Find real doctors with phone numbers, addresses, and ratings. Search by name, specialty, and location." />
+    <meta name="twitter:image" content="https://yodoc.netlify.app/favicon.svg" />
+    
+    <!-- Schema.org JSON-LD for Local Business / Medical Business -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "MedicalBusiness",
+      "name": "YoDoc - Doctor Finder",
+      "description": "Find and contact doctors in your area with real phone numbers, addresses, and ratings",
+      "url": "https://yodoc.netlify.app",
+      "serviceType": "Healthcare Provider Directory",
+      "areaServed": {
+        "@type": "Country",
+        "name": "United States"
+      },
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://yodoc.netlify.app/?q={search_term_string}"
+        },
+        "query-input": "required name=search_term_string"
+      },
+      "sameAs": [
+        "https://yodoc.netlify.app"
+      ]
+    }
+    </script>
+    
+    <!-- Additional Schema for WebSite -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "YoDoc",
+      "url": "https://yodoc.netlify.app",
+      "description": "Find doctors near you with real phone numbers, addresses, and ratings",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://yodoc.netlify.app/?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>

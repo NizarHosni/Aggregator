@@ -18,4 +18,15 @@
   to = "/index.html"
   status = 200
 
+# Ensure sitemap.xml and robots.txt are accessible
+[[headers]]
+  for = "/sitemap.xml"
+  [headers.values]
+    Content-Type = "application/xml"
+
+[[headers]]
+  for = "/robots.txt"
+  [headers.values]
+    Content-Type = "text/plain"
+
 

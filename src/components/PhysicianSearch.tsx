@@ -3,6 +3,7 @@ import { Search, LogOut, User, Stethoscope, Copy, Check, AlertCircle } from 'luc
 import { useAuth } from '../context/AuthContext';
 import { useSearchHistory } from '../hooks/useSearchHistory';
 import { SearchHistory } from './SearchHistory';
+import { useSEO } from '../hooks/useSEO';
 
 interface SearchResult {
   query: string;
@@ -31,6 +32,13 @@ export function PhysicianSearch() {
   const [showHistory, setShowHistory] = useState(true);
   const [searchResults, setSearchResults] = useState<SearchResult | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // SEO optimization - update meta tags
+  useSEO({
+    title: 'Find Doctors Near You - Real Phone Numbers & Reviews | YoDoc',
+    description: 'Find real doctors with phone numbers, addresses, and ratings. Search by name, specialty, and location. Contact healthcare providers directly. Verified US healthcare provider database.',
+    keywords: 'find doctors, doctor search, physicians near me, healthcare providers, doctor phone numbers, medical specialists, find doctors near me, doctor directory, physician directory',
+  });
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -174,10 +182,10 @@ ${resultsText}`;
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">
-                  AI Physician Search
+                  Find Real Doctors With Phone Numbers & Reviews
                 </h1>
                 <p className="text-sm text-gray-600">
-                  Find the right physician for your needs
+                  Search verified US healthcare providers by name, specialty, or location
                 </p>
               </div>
             </div>
@@ -199,6 +207,7 @@ ${resultsText}`;
         </div>
 
         <div className="bg-white shadow-lg border border-gray-200 rounded-2xl p-8 mb-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Search by Name, Specialty, or Location</h2>
           <form onSubmit={handleSearch} className="space-y-4">
             <div>
               <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
@@ -315,6 +324,31 @@ ${resultsText}`;
           <div className="mt-6 p-4 bg-blue-50 rounded-lg">
             <p className="text-sm text-gray-700">
               <span className="font-medium">Pro tip:</span> You can search by specialty, location, physician name, or a combination. Our AI will understand your intent and find the best matches.
+            </p>
+          </div>
+        </div>
+
+        {/* SEO-Friendly Content Section */}
+        <div className="bg-white shadow-lg border border-gray-200 rounded-2xl p-8 mb-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Find Doctors Near You - Verified Healthcare Providers</h2>
+          <div className="prose prose-sm max-w-none text-gray-700">
+            <p className="mb-4">
+              Search our comprehensive directory of verified US healthcare providers. Find doctors with real phone numbers, addresses, and contact information. Our database includes physicians from the official NPPES (National Plan and Provider Enumeration System) registry, ensuring you get accurate, up-to-date information.
+            </p>
+            <h3 className="text-lg font-semibold text-gray-900 mt-6 mb-3">How to Search for Doctors</h3>
+            <ul className="list-disc list-inside space-y-2 mb-4">
+              <li><strong>Search by Name:</strong> Enter a doctor's name (e.g., "Dr. John Smith")</li>
+              <li><strong>Search by Specialty:</strong> Find specialists by type (e.g., "Cardiologists in Houston, TX")</li>
+              <li><strong>Search by Location:</strong> Discover doctors near you (e.g., "Doctors in Los Angeles, CA")</li>
+              <li><strong>Combined Search:</strong> Combine name, specialty, and location for precise results</li>
+            </ul>
+            <h3 className="text-lg font-semibold text-gray-900 mt-6 mb-3">Popular Medical Specialties</h3>
+            <p className="mb-2">
+              Find specialists in: Cardiology, Orthopedic Surgery, Dermatology, Neurology, Pediatrics, Ophthalmology, Retina Surgery, Primary Care, and more.
+            </p>
+            <h3 className="text-lg font-semibold text-gray-900 mt-6 mb-3">Major Cities We Cover</h3>
+            <p className="mb-2">
+              Search for doctors in major US cities including: Los Angeles, New York, Chicago, Houston, Phoenix, Philadelphia, San Antonio, San Diego, Dallas, San Jose, and many more locations across the United States.
             </p>
           </div>
         </div>
