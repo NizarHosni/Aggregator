@@ -70,14 +70,55 @@ async function searchNPPES(
   // Limit to 50 results
   params.push('limit=50');
 
-  const url = `${baseUrl}&${params.join('&')}`;
+  // URL construction - baseUrl already has ?version=2.1, so use & for additional params
+  const url = params.length > 0 
+    ? `${baseUrl}&${params.join('&')}` 
+    : `${baseUrl}&limit=50`;
+  
+  // === API DEBUG LOG ===
+  console.log('=== NPPES API DEBUG ===');
+  console.log('NPPES Search Parameters:', { firstName, lastName, specialty, city, state });
+  console.log('NPPES API Request URL:', url);
   
   try {
-    const response = await fetch(url);
+    const startTime = Date.now();
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'YoDoc-PhysicianSearch/1.0',
+      },
+    });
+    const responseTime = Date.now() - startTime;
+    
+    console.log('NPPES API Response Status:', response.status, response.statusText);
+    console.log('NPPES API Response Time:', responseTime + 'ms');
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('NPPES API Error Response:', errorText);
+      return [];
+    }
+    
     const data = await response.json() as NPPESResponse;
+    console.log('NPPES API Response Data:', {
+      result_count: data.result_count,
+      results_length: data.results?.length || 0,
+      first_result: data.results?.[0] ? {
+        name: `${data.results[0].basic.first_name} ${data.results[0].basic.last_name}`,
+        npi: data.results[0].number,
+        specialty: data.results[0].taxonomies?.[0]?.desc,
+        city: data.results[0].addresses?.[0]?.city,
+        state: data.results[0].addresses?.[0]?.state,
+      } : null,
+    });
+    
     return data.results || [];
-  } catch (error) {
-    console.error('NPPES API error:', error);
+  } catch (error: any) {
+    console.error('=== NPPES API ERROR ===');
+    console.error('Error Type:', error.constructor.name);
+    console.error('Error Message:', error.message);
+    console.error('Error Stack:', error.stack);
+    console.error('Failed URL:', url);
     return [];
   }
 }
@@ -124,50 +165,129 @@ async function enhanceWithGooglePlaces(
       try {
         // Search for doctor by name and location
         const searchQuery = `${fullName} ${specialty} ${city} ${state}`;
-        const placesResponse = await fetch(
-          `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${googleApiKey}`
-        );
+        const placesSearchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${googleApiKey}`;
+        
+        // === GOOGLE PLACES API DEBUG ===
+        console.log('=== GOOGLE PLACES TEXT SEARCH DEBUG ===');
+        console.log('Doctor Name:', fullName);
+        console.log('Search Query:', searchQuery);
+        console.log('Google Places Search URL:', placesSearchUrl.replace(googleApiKey, 'API_KEY_HIDDEN'));
+        console.log('Google API Key Present:', !!googleApiKey);
+        console.log('Google API Key Length:', googleApiKey?.length || 0);
+        
+        const startTime = Date.now();
+        const placesResponse = await fetch(placesSearchUrl);
+        const responseTime = Date.now() - startTime;
+        
+        console.log('Google Places Response Status:', placesResponse.status, placesResponse.statusText);
+        console.log('Google Places Response Time:', responseTime + 'ms');
+        
+        if (!placesResponse.ok) {
+          const errorText = await placesResponse.text();
+          console.error('Google Places API Error Response:', errorText);
+          throw new Error(`Google Places API returned ${placesResponse.status}: ${errorText}`);
+        }
+        
         const placesData = await placesResponse.json() as {
           results?: Array<{
             place_id?: string;
             formatted_address?: string;
             rating?: number;
+            name?: string;
           }>;
           status?: string;
+          error_message?: string;
         };
+
+        console.log('Google Places Search Response:', {
+          status: placesData.status,
+          results_count: placesData.results?.length || 0,
+          error_message: placesData.error_message,
+          first_result: placesData.results?.[0] ? {
+            name: placesData.results[0].name,
+            place_id: placesData.results[0].place_id,
+            address: placesData.results[0].formatted_address,
+          } : null,
+        });
+
+        if (placesData.status === 'REQUEST_DENIED' || placesData.status === 'INVALID_REQUEST') {
+          console.error('Google Places API Error:', placesData.error_message || placesData.status);
+          throw new Error(`Google Places API error: ${placesData.error_message || placesData.status}`);
+        }
 
         if (placesData.results && placesData.results.length > 0) {
           const place = placesData.results[0];
           if (place.place_id) {
             // Get detailed info
-            const detailsResponse = await fetch(
-              `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=formatted_phone_number,rating&key=${googleApiKey}`
-            );
+            const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=formatted_phone_number,rating&key=${googleApiKey}`;
+            
+            console.log('=== GOOGLE PLACES DETAILS DEBUG ===');
+            console.log('Place ID:', place.place_id);
+            console.log('Details URL:', detailsUrl.replace(googleApiKey, 'API_KEY_HIDDEN'));
+            
+            const detailsStartTime = Date.now();
+            const detailsResponse = await fetch(detailsUrl);
+            const detailsResponseTime = Date.now() - detailsStartTime;
+            
+            console.log('Google Places Details Response Status:', detailsResponse.status);
+            console.log('Google Places Details Response Time:', detailsResponseTime + 'ms');
+            
+            if (!detailsResponse.ok) {
+              const errorText = await detailsResponse.text();
+              console.error('Google Places Details API Error:', errorText);
+              throw new Error(`Google Places Details API returned ${detailsResponse.status}`);
+            }
+            
             const detailsData = await detailsResponse.json() as {
               result?: {
                 formatted_phone_number?: string;
                 rating?: number;
               };
+              status?: string;
+              error_message?: string;
             };
+
+            console.log('Google Places Details Response:', {
+              status: detailsData.status,
+              has_phone: !!detailsData.result?.formatted_phone_number,
+              has_rating: !!detailsData.result?.rating,
+              error_message: detailsData.error_message,
+            });
 
             if (detailsData.result) {
               if (detailsData.result.formatted_phone_number) {
                 phone = detailsData.result.formatted_phone_number;
+                console.log('Updated phone from Google Places:', phone);
               }
               if (detailsData.result.rating) {
                 rating = detailsData.result.rating;
+                console.log('Updated rating from Google Places:', rating);
               }
             }
 
             if (place.formatted_address) {
               googleAddress = place.formatted_address;
+              console.log('Updated address from Google Places:', googleAddress);
             }
           }
+        } else {
+          console.warn('Google Places returned no results for:', searchQuery);
         }
-      } catch (error) {
-        console.warn(`Could not enhance with Google Places for ${fullName}:`, error);
+      } catch (error: any) {
+        console.error('=== GOOGLE PLACES API ERROR ===');
+        console.error('Error Type:', error.constructor.name);
+        console.error('Error Message:', error.message);
+        console.error('Error Stack:', error.stack);
+        console.error('Doctor Name:', fullName);
+        console.warn(`Could not enhance with Google Places for ${fullName}:`, error.message);
         // Continue with NPPES data only
       }
+    } else {
+      console.log('Google Places enhancement skipped:', {
+        has_api_key: !!googleApiKey,
+        has_city: !!city,
+        has_state: !!state,
+      });
     }
 
     // Calculate years of experience from enumeration date (approximate)
@@ -460,6 +580,12 @@ searchRoutes.post('/physicians', authenticateToken, async (req: AuthRequest, res
       return res.status(500).json({ error: 'OpenAI API key not configured' });
     }
 
+    // === API DEBUG LOG ===
+    console.log('=== SEARCH REQUEST DEBUG ===');
+    console.log('Original Query:', query);
+    console.log('User ID:', userId);
+    console.log('Search Radius:', searchRadius, 'meters');
+
     // Enhanced query parsing with fallback
     let specialty: string | null = null;
     let location: string | null = null;
@@ -474,9 +600,18 @@ searchRoutes.post('/physicians', authenticateToken, async (req: AuthRequest, res
     specialty = parsed.specialty;
     location = parsed.location;
 
+    console.log('=== PARSED QUERY PARAMETERS ===');
+    console.log('Parsed Name:', extractedName);
+    console.log('Parsed Specialty:', specialty);
+    console.log('Parsed Location:', location);
+
     // Try OpenAI extraction as enhancement (not required)
     if (process.env.OPENAI_API_KEY) {
       try {
+        console.log('=== OPENAI API DEBUG ===');
+        console.log('OpenAI API Key Present:', !!process.env.OPENAI_API_KEY);
+        console.log('OpenAI API Key Length:', process.env.OPENAI_API_KEY?.length || 0);
+        
         const extractionPrompt = `You are a medical search assistant. Extract the following information from this search query: "${query}"
 
 Return a JSON object with:
@@ -487,6 +622,9 @@ Return a JSON object with:
 
 Only return valid JSON, no other text.`;
 
+        console.log('OpenAI Extraction Prompt:', extractionPrompt);
+        
+        const startTime = Date.now();
         const extractionResponse = await openai.chat.completions.create({
           model: 'gpt-4o-mini',
           messages: [
@@ -502,8 +640,17 @@ Only return valid JSON, no other text.`;
           temperature: 0.3,
           max_tokens: 200,
         });
-
-        const extractedData = JSON.parse(extractionResponse.choices[0].message.content || '{}');
+        const responseTime = Date.now() - startTime;
+        
+        console.log('OpenAI API Response Time:', responseTime + 'ms');
+        console.log('OpenAI Model Used:', extractionResponse.model);
+        console.log('OpenAI Usage:', extractionResponse.usage);
+        
+        const rawContent = extractionResponse.choices[0].message.content || '{}';
+        console.log('OpenAI Raw Response:', rawContent);
+        
+        const extractedData = JSON.parse(rawContent);
+        console.log('OpenAI Parsed Data:', extractedData);
         
         // Use OpenAI results if they're better (non-null values)
         if (extractedData.firstName || extractedData.lastName) {
@@ -511,21 +658,37 @@ Only return valid JSON, no other text.`;
             firstName: extractedData.firstName || extractedName.firstName,
             lastName: extractedData.lastName || extractedName.lastName,
           };
+          console.log('Updated name from OpenAI:', extractedName);
         }
         if (extractedData.specialty) {
           specialty = extractedData.specialty;
+          console.log('Updated specialty from OpenAI:', specialty);
         }
         if (extractedData.location) {
           location = extractedData.location;
+          console.log('Updated location from OpenAI:', location);
         }
       } catch (openaiError: any) {
+        console.error('=== OPENAI API ERROR ===');
+        console.error('Error Type:', openaiError.constructor.name);
+        console.error('Error Message:', openaiError.message);
+        console.error('Error Code:', (openaiError as any).code);
+        console.error('Error Status:', (openaiError as any).status);
+        console.error('Error Stack:', openaiError.stack);
         console.warn('OpenAI extraction failed, using regex parsing:', openaiError.message);
         // Continue with regex-based parsing results
       }
+    } else {
+      console.log('OpenAI API key not configured, skipping OpenAI extraction');
     }
 
     // Parse location into city and state
     const { city, state } = parseLocation(location);
+    
+    console.log('=== PARSED LOCATION ===');
+    console.log('Original Location String:', location);
+    console.log('Parsed City:', city);
+    console.log('Parsed State:', state);
 
     // Validate segmented search requirements
     const validation = validateSearchParams(
@@ -657,6 +820,11 @@ Only return valid JSON, no other text.`;
       npi?: string;
     }> = [];
 
+    console.log('=== GOOGLE PLACES CONFIGURATION ===');
+    console.log('Google Places API Key Present:', !!process.env.GOOGLE_PLACES_API_KEY);
+    console.log('NPPES Results Count:', nppesResults.length);
+    console.log('Will Enhance with Google Places:', nppesResults.length > 0 && !!process.env.GOOGLE_PLACES_API_KEY);
+
     if (nppesResults.length > 0 && process.env.GOOGLE_PLACES_API_KEY) {
       // Enhance up to 50 results with Google Places
       const doctorsToEnhance = nppesResults.slice(0, 50);
@@ -748,6 +916,28 @@ Only return valid JSON, no other text.`;
     }
 
     const resultsCount = physicians.length;
+
+    // === FINAL RESULTS DEBUG ===
+    console.log('=== SEARCH RESULTS SUMMARY ===');
+    console.log('Total Physicians Found:', resultsCount);
+    console.log('Final Parameters Used:', {
+      firstName: extractedName.firstName,
+      lastName: extractedName.lastName,
+      specialty,
+      city,
+      state,
+    });
+    if (resultsCount > 0) {
+      console.log('Sample Results:', physicians.slice(0, 3).map(p => ({
+        name: p.name,
+        specialty: p.specialty,
+        location: p.location,
+        phone: p.phone,
+        rating: p.rating,
+      })));
+    } else {
+      console.log('No results found - check API logs above for issues');
+    }
 
     // Save to search history
     await sql`
