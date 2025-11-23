@@ -564,13 +564,18 @@ function validateSearchParams(
 // AI-powered physician search with NPPES integration
 searchRoutes.post('/physicians', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const { query, radius } = req.body;
+    const { query, radius, page = 1, pageSize = 15 } = req.body;
     const userId = req.userId!;
     
     // Default radius is 5km (5000 meters), max 50km
     const searchRadius = radius && typeof radius === 'number' && radius > 0 && radius <= 50000 
       ? radius 
       : 5000;
+    
+    // Pagination parameters
+    const currentPage = Math.max(1, parseInt(String(page)) || 1);
+    const resultsPerPage = Math.min(50, Math.max(5, parseInt(String(pageSize)) || 15));
+    const offset = (currentPage - 1) * resultsPerPage;
 
     if (!query || !query.trim()) {
       return res.status(400).json({ error: 'Search query is required' });
@@ -916,10 +921,14 @@ Only return valid JSON, no other text.`;
     }
 
     const resultsCount = physicians.length;
+    const totalPages = Math.ceil(resultsCount / resultsPerPage);
+    const paginatedResults = physicians.slice(offset, offset + resultsPerPage);
+    const hasMore = offset + resultsPerPage < resultsCount;
 
     // === FINAL RESULTS DEBUG ===
     console.log('=== SEARCH RESULTS SUMMARY ===');
     console.log('Total Physicians Found:', resultsCount);
+    console.log('Pagination:', { currentPage, resultsPerPage, offset, hasMore, totalPages });
     console.log('Final Parameters Used:', {
       firstName: extractedName.firstName,
       lastName: extractedName.lastName,
@@ -939,19 +948,28 @@ Only return valid JSON, no other text.`;
       console.log('No results found - check API logs above for issues');
     }
 
-    // Save to search history
-    await sql`
-      INSERT INTO search_history (user_id, query, specialty, location, results_count)
-      VALUES (${userId}, ${query}, ${specialty || 'Not specified'}, ${location}, ${resultsCount})
-    `;
+    // Save to search history only on first page
+    if (currentPage === 1) {
+      await sql`
+        INSERT INTO search_history (user_id, query, specialty, location, results_count)
+        VALUES (${userId}, ${query}, ${specialty || 'Not specified'}, ${location}, ${resultsCount})
+      `;
+    }
 
     res.json({
       query,
       specialty: specialty || 'Not specified',
       location: location,
-      results: physicians,
+      results: paginatedResults,
       resultsCount,
       searchRadius: (city || state) ? searchRadius : null,
+      pagination: {
+        currentPage,
+        resultsPerPage,
+        totalPages,
+        hasMore,
+        totalResults: resultsCount,
+      },
     });
   } catch (error: any) {
     console.error('Search error:', error);
