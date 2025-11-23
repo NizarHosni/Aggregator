@@ -102,11 +102,12 @@ function DoctorCard({ doctor, index }: DoctorCardProps) {
 
 export function PhysicianSearch() {
   const { user, signOut } = useAuth();
-  const { addToHistory } = useSearchHistory();
+  const { addToHistory, saveSearchResults, getSearchResults, refreshHistory } = useSearchHistory();
   const [query, setQuery] = useState('');
   const [searchRadius, setSearchRadius] = useState(5);
   const [searching, setSearching] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingHistoryId, setLoadingHistoryId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(true);
   const [searchResults, setSearchResults] = useState<SearchResult | null>(null);
   const [allResults, setAllResults] = useState<SearchResult['results']>([]);
@@ -147,12 +148,44 @@ export function PhysicianSearch() {
         setCurrentPage(1);
         setHasMoreResults(results.pagination?.hasMore || false);
 
+        // Save to history (this triggers backend save)
         await addToHistory(
           results.query,
           results.specialty,
           getLocationText(results.location),
           results.resultsCount
         );
+
+        // Refresh history to get the new history item ID
+        await refreshHistory();
+        
+        // Small delay to ensure backend has saved
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Get the most recent history item to save results with its ID
+        const { historyApi } = await import('../lib/api');
+        const historyList = await historyApi.getHistory();
+        if (historyList.length > 0) {
+          // Find the history item that matches this search (by query and recent timestamp)
+          const latestHistoryItem = historyList.find(item => 
+            item.query === results.query && 
+            new Date(item.created_at).getTime() > Date.now() - 5000 // Within last 5 seconds
+          ) || historyList[0]; // Fallback to first item if no match
+          
+          const latestHistoryId = latestHistoryItem.id;
+          
+          // Save full results to localStorage
+          saveSearchResults(latestHistoryId, {
+            query: results.query,
+            specialty: results.specialty,
+            location: results.location,
+            results: results.results,
+            resultsCount: results.resultsCount,
+            searchRadius: results.searchRadius,
+            pagination: results.pagination,
+            timestamp: new Date().toISOString(),
+          });
+        }
       } else {
         // Subsequent pages - append results
         setAllResults(prev => [...prev, ...results.results]);
@@ -217,13 +250,56 @@ export function PhysicianSearch() {
     }, 300);
   };
 
-  const handleSelectSearch = (searchQuery: string) => {
-    setQuery(searchQuery);
+  const handleSelectSearch = async (historyItem: { id: string; query: string }) => {
+    setLoadingHistoryId(historyItem.id);
     setShowHistory(false);
-    setSearchResults(null);
-    setAllResults([]);
-    setCurrentPage(1);
-    setHasMoreResults(false);
+    
+    // Brief delay for better UX
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    try {
+      // Try to restore results from localStorage
+      const storedResults = getSearchResults(historyItem.id);
+      
+      if (storedResults) {
+        // Restore the exact results from history
+        setSearchResults({
+          query: storedResults.query,
+          specialty: storedResults.specialty,
+          location: storedResults.location,
+          results: storedResults.results,
+          resultsCount: storedResults.resultsCount,
+          searchRadius: storedResults.searchRadius,
+          pagination: storedResults.pagination,
+        });
+        setAllResults(storedResults.results);
+        setCurrentPage(storedResults.pagination?.currentPage || 1);
+        setHasMoreResults(storedResults.pagination?.hasMore || false);
+        setQuery(storedResults.query);
+        
+        // Scroll to results
+        setTimeout(() => {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 100);
+      } else {
+        // Fallback: if results not found, just set query and let user search again
+        setQuery(historyItem.query);
+        setSearchResults(null);
+        setAllResults([]);
+        setCurrentPage(1);
+        setHasMoreResults(false);
+      }
+    } catch (error) {
+      console.error('Error restoring search from history:', error);
+      // Fallback to just setting the query
+      setQuery(historyItem.query);
+      setSearchResults(null);
+      setAllResults([]);
+      setCurrentPage(1);
+      setHasMoreResults(false);
+    } finally {
+      setLoadingHistoryId(null);
+    }
   };
 
   const getLocationText = (location: SearchResult['location']): string => {
@@ -561,7 +637,10 @@ export function PhysicianSearch() {
         {/* Search History */}
         {showHistory && !searchResults && (
           <div className="animate-fade-in">
-            <SearchHistory onSelectSearch={handleSelectSearch} />
+            <SearchHistory 
+              onSelectSearch={handleSelectSearch} 
+              loadingHistoryId={loadingHistoryId}
+            />
           </div>
         )}
       </div>

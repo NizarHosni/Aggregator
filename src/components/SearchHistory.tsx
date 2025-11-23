@@ -2,10 +2,11 @@ import { Clock, MapPin, Stethoscope, X, Trash2, Loader2 } from 'lucide-react';
 import { useSearchHistory } from '../hooks/useSearchHistory';
 
 interface SearchHistoryProps {
-  onSelectSearch: (query: string) => void;
+  onSelectSearch: (historyItem: { id: string; query: string }) => void;
+  loadingHistoryId?: string | null;
 }
 
-export function SearchHistory({ onSelectSearch }: SearchHistoryProps) {
+export function SearchHistory({ onSelectSearch, loadingHistoryId }: SearchHistoryProps) {
   const { history, loading, deleteFromHistory, clearHistory } = useSearchHistory();
 
   if (loading) {
@@ -77,25 +78,37 @@ export function SearchHistory({ onSelectSearch }: SearchHistoryProps) {
       </div>
 
       <div className="divide-y divide-gray-100/50 max-h-[600px] overflow-y-auto">
-        {history.map((item, index) => (
-          <div
-            key={item.id}
-            className="p-5 hover:bg-white/50 transition-all duration-200 group cursor-pointer"
-            style={{ animationDelay: `${index * 0.05}s` }}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <button
-                onClick={() => onSelectSearch(item.query)}
-                className="flex-1 text-left"
-              >
+        {history.map((item, index) => {
+          const isLoading = loadingHistoryId === item.id;
+          return (
+            <div
+              key={item.id}
+              className={`p-5 transition-all duration-200 group ${
+                isLoading ? 'bg-blue-50/50 cursor-wait' : 'hover:bg-white/50 cursor-pointer'
+              }`}
+              style={{ animationDelay: `${index * 0.05}s` }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <button
+                  onClick={() => !isLoading && onSelectSearch({ id: item.id, query: item.query })}
+                  disabled={isLoading}
+                  className="flex-1 text-left disabled:opacity-75"
+                >
                 <div className="flex items-start gap-4">
                   <div className="mt-1 w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
                     <Clock className="w-4 h-4 text-blue-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-heading text-base mb-2 group-hover:text-blue-600 transition-colors">
-                      {item.query}
-                    </p>
+                    <div className="flex items-center gap-2 mb-2">
+                      <p className={`text-heading text-base transition-colors ${
+                        isLoading ? 'text-blue-600' : 'group-hover:text-blue-600'
+                      }`}>
+                        {item.query}
+                      </p>
+                      {isLoading && (
+                        <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
+                      )}
+                    </div>
                     <div className="flex flex-wrap items-center gap-3 text-xs">
                       {item.specialty && (
                         <span className="badge">
@@ -120,16 +133,22 @@ export function SearchHistory({ onSelectSearch }: SearchHistoryProps) {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  deleteFromHistory(item.id);
+                  if (!isLoading) {
+                    deleteFromHistory(item.id);
+                  }
                 }}
-                className="opacity-0 group-hover:opacity-100 transition-all duration-200 p-2 hover:bg-red-50 rounded-lg"
+                disabled={isLoading}
+                className={`transition-all duration-200 p-2 hover:bg-red-50 rounded-lg ${
+                  isLoading ? 'opacity-50 cursor-not-allowed' : 'opacity-0 group-hover:opacity-100'
+                }`}
                 aria-label="Delete"
               >
                 <X className="w-4 h-4 text-red-600" />
               </button>
             </div>
           </div>
-        ))}
+        );
+        })}
       </div>
     </div>
   );
