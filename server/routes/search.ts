@@ -328,33 +328,314 @@ const STATE_MAP: { [key: string]: string } = {
   'district of columbia': 'DC'
 };
 
-// Specialty mapping for common terms
+// Comprehensive specialty mapping with all variations
 const SPECIALTY_MAP: { [key: string]: string } = {
+  // OPHTHALMOLOGY VARIATIONS
+  'ophthalmology': 'Ophthalmology',
+  'ophthalmologie': 'Ophthalmology',
+  'ophthalmologist': 'Ophthalmology',
+  'ophthalmologists': 'Ophthalmology',
+  'eye doctor': 'Ophthalmology',
+  'eye doctors': 'Ophthalmology',
+  'eye specialist': 'Ophthalmology',
+  'eye specialists': 'Ophthalmology',
+  'ocular': 'Ophthalmology',
+  'ocular specialist': 'Ophthalmology',
+  
+  // RETINA SURGERY VARIATIONS
   'retina': 'Retina Surgery',
   'retina surgeon': 'Retina Surgery',
+  'retina surgeons': 'Retina Surgery',
   'retina specialist': 'Retina Surgery',
-  'ophthalmolog': 'Ophthalmology',
-  'eye doctor': 'Ophthalmology',
-  'cardiolog': 'Cardiology',
+  'retina specialists': 'Retina Surgery',
+  'retinal': 'Retina Surgery',
+  'retinal surgeon': 'Retina Surgery',
+  'retinal surgeons': 'Retina Surgery',
+  'retinal specialist': 'Retina Surgery',
+  'vitreoretinal': 'Retina Surgery',
+  'vitreoretinal surgeon': 'Retina Surgery',
+  'vitreoretinal surgeons': 'Retina Surgery',
+  'macula specialist': 'Retina Surgery',
+  'macular specialist': 'Retina Surgery',
+  
+  // CARDIOLOGY VARIATIONS
+  'cardiology': 'Cardiology',
+  'cardiologist': 'Cardiology',
+  'cardiologists': 'Cardiology',
   'heart doctor': 'Cardiology',
+  'heart doctors': 'Cardiology',
+  'cardiac specialist': 'Cardiology',
+  'cardiac specialists': 'Cardiology',
+  'heart specialist': 'Cardiology',
+  'heart specialists': 'Cardiology',
+  'cardiovascular': 'Cardiology',
+  'cardiovascular disease': 'Cardiology',
+  
+  // DERMATOLOGY VARIATIONS
+  'dermatology': 'Dermatology',
+  'dermatologist': 'Dermatology',
+  'dermatologists': 'Dermatology',
+  'skin doctor': 'Dermatology',
+  'skin doctors': 'Dermatology',
+  'skin specialist': 'Dermatology',
+  'skin specialists': 'Dermatology',
+  'dermatologic': 'Dermatology',
+  'dermatologic surgery': 'Dermatology',
+  'mohs surgery': 'Dermatology',
+  'cosmetic dermatology': 'Dermatology',
+  
+  // ORTHOPEDICS VARIATIONS
+  'orthopedics': 'Orthopedic Surgery',
   'orthopedic': 'Orthopedic Surgery',
   'orthoped': 'Orthopedic Surgery',
-  'dermatolog': 'Dermatology',
-  'neurolog': 'Neurology',
+  'orthopaedic': 'Orthopedic Surgery',
+  'orthopedic surgeon': 'Orthopedic Surgery',
+  'orthopedic surgeons': 'Orthopedic Surgery',
+  'orthopaedic surgeon': 'Orthopedic Surgery',
+  'bone doctor': 'Orthopedic Surgery',
+  'bone doctors': 'Orthopedic Surgery',
+  'ortho': 'Orthopedic Surgery',
+  
+  // PEDIATRICS VARIATIONS
+  'pediatrics': 'Pediatrics',
   'pediatric': 'Pediatrics',
+  'pediatrician': 'Pediatrics',
+  'pediatricians': 'Pediatrics',
+  'children doctor': 'Pediatrics',
+  'children doctors': 'Pediatrics',
+  'kid doctor': 'Pediatrics',
+  'kid doctors': 'Pediatrics',
+  'pediatric specialist': 'Pediatrics',
+  
+  // NEUROLOGY VARIATIONS
+  'neurology': 'Neurology',
+  'neurologist': 'Neurology',
+  'neurologists': 'Neurology',
+  'brain doctor': 'Neurology',
+  'brain doctors': 'Neurology',
+  'nerve specialist': 'Neurology',
+  'nerve specialists': 'Neurology',
+  'neurological': 'Neurology',
+  
+  // PRIMARY CARE VARIATIONS
   'primary care': 'Primary Care',
-  'general practice': 'General Practice',
+  'primary care physician': 'Primary Care',
+  'primary care physicians': 'Primary Care',
+  'pcm': 'Primary Care',
+  'pcp': 'Primary Care',
+  
+  // FAMILY MEDICINE VARIATIONS
   'family medicine': 'Family Medicine',
+  'family doctor': 'Family Medicine',
+  'family doctors': 'Family Medicine',
+  'family physician': 'Family Medicine',
+  'family physicians': 'Family Medicine',
+  'family practitioner': 'Family Medicine',
+  'family practitioners': 'Family Medicine',
+  
+  // GENERAL PRACTICE VARIATIONS
+  'general practice': 'General Practice',
+  'general practitioner': 'General Practice',
+  'general practitioners': 'General Practice',
+  'gp': 'General Practice',
+  'gps': 'General Practice',
+  
+  // INTERNAL MEDICINE VARIATIONS
   'internal medicine': 'Internal Medicine',
+  'internist': 'Internal Medicine',
+  'internists': 'Internal Medicine',
+  
+  // ADDITIONAL SPECIALTIES
+  'urology': 'Urology',
+  'urologist': 'Urology',
+  'urologists': 'Urology',
+  'gastroenterology': 'Gastroenterology',
+  'gastroenterologist': 'Gastroenterology',
+  'gastroenterologists': 'Gastroenterology',
+  'gi doctor': 'Gastroenterology',
+  'gi specialist': 'Gastroenterology',
+  'oncology': 'Oncology',
+  'oncologist': 'Oncology',
+  'oncologists': 'Oncology',
+  'cancer doctor': 'Oncology',
+  'cancer specialist': 'Oncology',
+  'psychiatry': 'Psychiatry',
+  'psychiatrist': 'Psychiatry',
+  'psychiatrists': 'Psychiatry',
+  'psychology': 'Psychiatry',
+  'psychologist': 'Psychiatry',
+  'psychologists': 'Psychiatry',
+  'psychiatric': 'Psychiatry',
+  'anesthesiology': 'Anesthesiology',
+  'anesthesiologist': 'Anesthesiology',
+  'anesthesiologists': 'Anesthesiology',
+  'anesthesia': 'Anesthesiology',
+  'radiology': 'Radiology',
+  'radiologist': 'Radiology',
+  'radiologists': 'Radiology',
+  'pathology': 'Pathology',
+  'pathologist': 'Pathology',
+  'pathologists': 'Pathology',
+  'emergency medicine': 'Emergency Medicine',
+  'er doctor': 'Emergency Medicine',
+  'emergency physician': 'Emergency Medicine',
+  'emergency physicians': 'Emergency Medicine',
+  'obstetrics': 'Obstetrics and Gynecology',
+  'obgyn': 'Obstetrics and Gynecology',
+  'ob-gyn': 'Obstetrics and Gynecology',
+  'gynecology': 'Obstetrics and Gynecology',
+  'gynecologist': 'Obstetrics and Gynecology',
+  'gynecologists': 'Obstetrics and Gynecology',
+  'obstetrician': 'Obstetrics and Gynecology',
+  'obstetricians': 'Obstetrics and Gynecology',
+  'endocrinology': 'Endocrinology',
+  'endocrinologist': 'Endocrinology',
+  'endocrinologists': 'Endocrinology',
+  'diabetes doctor': 'Endocrinology',
+  'diabetes specialist': 'Endocrinology',
+  'pulmonology': 'Pulmonology',
+  'pulmonologist': 'Pulmonology',
+  'pulmonologists': 'Pulmonology',
+  'lung doctor': 'Pulmonology',
+  'lung specialist': 'Pulmonology',
+  'rheumatology': 'Rheumatology',
+  'rheumatologist': 'Rheumatology',
+  'rheumatologists': 'Rheumatology',
+  'nephrology': 'Nephrology',
+  'nephrologist': 'Nephrology',
+  'nephrologists': 'Nephrology',
+  'kidney doctor': 'Nephrology',
+  'kidney specialist': 'Nephrology',
 };
 
-// Alternative specialty terms for fallback searches
-const SPECIALTY_ALTERNATIVES: { [key: string]: string[] } = {
-  'Retina Surgery': ['Ophthalmology', 'Retina'],
-  'Ophthalmology': ['Retina Surgery', 'Eye'],
-  'Cardiology': ['Cardiovascular Disease'],
-  'Orthopedic Surgery': ['Orthopedic', 'Orthopedics'],
+// Reverse mapping for quick lookup (variation -> canonical)
+const SPECIALTY_SYNONYMS: { [key: string]: string } = {};
+Object.entries(SPECIALTY_MAP).forEach(([variation, canonical]) => {
+  SPECIALTY_SYNONYMS[variation.toLowerCase()] = canonical;
+  // Also add canonical itself
+  SPECIALTY_SYNONYMS[canonical.toLowerCase()] = canonical;
+});
+
+// Broader specialty categories for fallback searches
+const BROADER_SPECIALTY_MAP: { [key: string]: string } = {
+  'Retina Surgery': 'Ophthalmology',
+  'Vitreoretinal Surgery': 'Ophthalmology',
+  'Cataract Surgery': 'Ophthalmology',
+  'Cornea Specialist': 'Ophthalmology',
+  'Glaucoma Specialist': 'Ophthalmology',
+  'Interventional Cardiology': 'Cardiology',
+  'Electrophysiology': 'Cardiology',
+  'Cardiac Surgery': 'Cardiology',
+  'Cosmetic Dermatology': 'Dermatology',
+  'Dermatologic Surgery': 'Dermatology',
+  'Mohs Surgery': 'Dermatology',
 };
+
+// Related specialties for search expansion
+const RELATED_SPECIALTIES: { [key: string]: string[] } = {
+  'Ophthalmology': ['Retina Surgery', 'Cataract Surgery', 'Cornea Specialist', 'Glaucoma Specialist', 'Vitreoretinal Surgery'],
+  'Retina Surgery': ['Ophthalmology', 'Vitreoretinal Surgery'],
+  'Cardiology': ['Interventional Cardiology', 'Electrophysiology', 'Cardiac Surgery', 'Cardiovascular Disease'],
+  'Dermatology': ['Cosmetic Dermatology', 'Dermatologic Surgery', 'Mohs Surgery'],
+  'Orthopedic Surgery': ['Sports Medicine', 'Orthopedic Trauma', 'Joint Replacement'],
+  'Primary Care': ['Family Medicine', 'General Practice', 'Internal Medicine'],
+  'Family Medicine': ['Primary Care', 'General Practice'],
+  'General Practice': ['Primary Care', 'Family Medicine'],
+};
+
+// Alternative specialty terms for fallback searches (legacy support)
+const SPECIALTY_ALTERNATIVES: { [key: string]: string[] } = {
+  'Retina Surgery': ['Ophthalmology', 'Retina', 'Vitreoretinal Surgery'],
+  'Ophthalmology': ['Retina Surgery', 'Eye', 'Ocular'],
+  'Cardiology': ['Cardiovascular Disease', 'Interventional Cardiology'],
+  'Orthopedic Surgery': ['Orthopedic', 'Orthopedics', 'Sports Medicine'],
+  'Dermatology': ['Cosmetic Dermatology', 'Dermatologic Surgery'],
+  'Primary Care': ['Family Medicine', 'General Practice', 'Internal Medicine'],
+  'Family Medicine': ['Primary Care', 'General Practice'],
+  'General Practice': ['Primary Care', 'Family Medicine'],
+};
+
+// String similarity function for fuzzy matching
+function stringSimilarity(s1: string, s2: string): number {
+  const longer = s1.length > s2.length ? s1 : s2;
+  const shorter = s1.length > s2.length ? s2 : s1;
+  const longerLength = longer.length;
+  if (longerLength === 0) return 1.0;
+  return (longerLength - editDistance(longer, shorter)) / longerLength;
+}
+
+// Edit distance (Levenshtein distance) calculation
+function editDistance(s1: string, s2: string): number {
+  s1 = s1.toLowerCase();
+  s2 = s2.toLowerCase();
+  const costs: number[] = [];
+  for (let i = 0; i <= s1.length; i++) {
+    let lastValue = i;
+    for (let j = 0; j <= s2.length; j++) {
+      if (i === 0) {
+        costs[j] = j;
+      } else if (j > 0) {
+        let newValue = costs[j - 1];
+        if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {
+          newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+        }
+        costs[j - 1] = lastValue;
+        lastValue = newValue;
+      }
+    }
+    if (i > 0) costs[s2.length] = lastValue;
+  }
+  return costs[s2.length];
+}
+
+// Extract specialty from query with fuzzy matching
+function extractSpecialtyFromQuery(query: string): string | null {
+  const queryLower = query.toLowerCase();
+  
+  // First, try direct match (exact or substring)
+  for (const [variation, canonical] of Object.entries(SPECIALTY_SYNONYMS)) {
+    if (queryLower.includes(variation)) {
+      return canonical;
+    }
+  }
+  
+  // If no direct match, try fuzzy matching on individual words
+  const words = queryLower.split(/\s+/).filter(w => w.length > 2); // Filter out short words
+  for (const word of words) {
+    for (const [variation, canonical] of Object.entries(SPECIALTY_SYNONYMS)) {
+      const similarity = stringSimilarity(word, variation);
+      if (similarity > 0.75) { // 75% similarity threshold
+        return canonical;
+      }
+    }
+  }
+  
+  // Try multi-word combinations (e.g., "retina surgeon")
+  for (let i = 0; i < words.length - 1; i++) {
+    const twoWord = `${words[i]} ${words[i + 1]}`;
+    for (const [variation, canonical] of Object.entries(SPECIALTY_SYNONYMS)) {
+      if (variation.includes(twoWord) || twoWord.includes(variation)) {
+        return canonical;
+      }
+      const similarity = stringSimilarity(twoWord, variation);
+      if (similarity > 0.7) {
+        return canonical;
+      }
+    }
+  }
+  
+  return null;
+}
+
+// Get broader specialty category
+function getBroaderSpecialty(specialty: string): string | null {
+  return BROADER_SPECIALTY_MAP[specialty] || null;
+}
+
+// Get related specialties for search expansion
+function getRelatedSpecialties(specialty: string): string[] {
+  return RELATED_SPECIALTIES[specialty] || [];
+}
 
 // Parse name from query string (handles middle initials)
 function parseName(query: string): { firstName: string | null; lastName: string | null } {
@@ -490,14 +771,16 @@ function parseSearchQuery(query: string): {
     }
   }
 
-  // Extract specialty keywords
-  const queryLower = query.toLowerCase();
-  for (const [keyword, spec] of Object.entries(SPECIALTY_MAP)) {
-    if (queryLower.includes(keyword)) {
-      specialty = spec;
-      // Remove specialty from query
-      query = query.replace(new RegExp(keyword, 'gi'), '').trim();
-      break;
+  // Extract specialty using improved matching (direct + fuzzy)
+  const extractedSpecialty = extractSpecialtyFromQuery(query);
+  if (extractedSpecialty) {
+    specialty = extractedSpecialty;
+    // Remove specialty keywords from query to help with name extraction
+    const specialtyKeywords = Object.keys(SPECIALTY_MAP).filter(
+      key => SPECIALTY_MAP[key] === extractedSpecialty
+    );
+    for (const keyword of specialtyKeywords) {
+      query = query.replace(new RegExp(`\\b${keyword}\\b`, 'gi'), '').trim();
     }
   }
 
@@ -666,8 +949,16 @@ Only return valid JSON, no other text.`;
           console.log('Updated name from OpenAI:', extractedName);
         }
         if (extractedData.specialty) {
-          specialty = extractedData.specialty;
-          console.log('Updated specialty from OpenAI:', specialty);
+          // Use our improved specialty matching to normalize OpenAI's specialty extraction
+          const normalizedSpecialty = extractSpecialtyFromQuery(extractedData.specialty);
+          if (normalizedSpecialty) {
+            specialty = normalizedSpecialty;
+            console.log('Updated specialty from OpenAI (normalized):', specialty);
+          } else {
+            // If OpenAI returned a specialty we don't recognize, try to match it
+            specialty = extractedData.specialty;
+            console.log('Updated specialty from OpenAI (raw):', specialty);
+          }
         }
         if (extractedData.location) {
           location = extractedData.location;
@@ -766,12 +1057,49 @@ Only return valid JSON, no other text.`;
       }
     }
 
-    // Attempt 4: Try with alternative specialty terms or broader searches
+    // Attempt 4: Try with alternative specialty terms, broader categories, or related specialties
     if (nppesResults.length === 0) {
       searchAttempt = 4;
       
-      // Try alternative specialty terms if available
-      if (specialty && SPECIALTY_ALTERNATIVES[specialty]) {
+      // Try broader specialty category first
+      if (specialty) {
+        const broaderSpecialty = getBroaderSpecialty(specialty);
+        if (broaderSpecialty) {
+          nppesResults = await searchNPPES(
+            extractedName.firstName,
+            extractedName.lastName,
+            broaderSpecialty,
+            city,
+            state
+          );
+          if (nppesResults.length > 0) {
+            console.log(`Search attempt ${searchAttempt}: NPPES returned ${nppesResults.length} results (using broader specialty: ${broaderSpecialty})`);
+            specialty = broaderSpecialty; // Update specialty for result display
+          }
+        }
+      }
+      
+      // Try related specialties if broader didn't work
+      if (nppesResults.length === 0 && specialty) {
+        const relatedSpecialties = getRelatedSpecialties(specialty);
+        for (const relatedSpecialty of relatedSpecialties) {
+          nppesResults = await searchNPPES(
+            extractedName.firstName,
+            extractedName.lastName,
+            relatedSpecialty,
+            city,
+            state
+          );
+          if (nppesResults.length > 0) {
+            console.log(`Search attempt ${searchAttempt}: NPPES returned ${nppesResults.length} results (using related specialty: ${relatedSpecialty})`);
+            specialty = relatedSpecialty; // Update specialty for result display
+            break;
+          }
+        }
+      }
+      
+      // Try alternative specialty terms if available (legacy support)
+      if (nppesResults.length === 0 && specialty && SPECIALTY_ALTERNATIVES[specialty]) {
         for (const altSpecialty of SPECIALTY_ALTERNATIVES[specialty]) {
           if (city || state) {
             nppesResults = await searchNPPES(
@@ -783,6 +1111,7 @@ Only return valid JSON, no other text.`;
             );
             if (nppesResults.length > 0) {
               console.log(`Search attempt ${searchAttempt}: NPPES returned ${nppesResults.length} results (using alternative specialty: ${altSpecialty})`);
+              specialty = altSpecialty; // Update specialty for result display
               break;
             }
           }
@@ -896,15 +1225,27 @@ Only return valid JSON, no other text.`;
         errorMessage = `No doctors found for "${query}". Try:`;
         suggestions.push('• Checking your spelling');
         suggestions.push('• Using a nearby city or different location');
-        suggestions.push('• Searching for a related specialty');
+        
+        // Suggest related specialties if we have a specialty
+        if (specialty) {
+          const related = getRelatedSpecialties(specialty);
+          const broader = getBroaderSpecialty(specialty);
+          if (broader) {
+            suggestions.push(`• Trying a broader specialty: "${broader}"`);
+          }
+          if (related.length > 0) {
+            suggestions.push(`• Trying related specialties: ${related.slice(0, 2).join(', ')}`);
+          }
+        } else {
+          // If no specialty detected, suggest common specialties
+          suggestions.push('• Adding a specialty: "retina surgeon", "cardiologist", "dermatologist", etc.');
+        }
+        
         if (city || state) {
           suggestions.push(`• Expanding your search radius (currently ${searchRadius / 1000}km)`);
         }
         if (extractedName.firstName || extractedName.lastName) {
           suggestions.push('• Trying a partial name match (e.g., just last name)');
-        }
-        if (specialty) {
-          suggestions.push('• Trying a broader specialty term');
         }
       }
 
