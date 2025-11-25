@@ -27,7 +27,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const currentUser = await authApi.getCurrentUser();
         setUser(currentUser);
       } catch (error) {
-        setUser(null);
+        // Handle 502 errors gracefully - don't clear user if service is temporarily down
+        const err = error as Error & { status?: number };
+        if (err.status === 502) {
+          // Service temporarily unavailable - keep existing user state if any
+          console.warn('Auth service temporarily unavailable');
+        } else {
+          // Other errors - clear user
+          setUser(null);
+        }
       } finally {
         setLoading(false);
       }

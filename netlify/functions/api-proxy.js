@@ -8,35 +8,37 @@ exports.handler = async (event) => {
       statusCode: 200,
       headers: {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
         'Access-Control-Max-Age': '86400',
       },
       body: '',
     };
   }
 
-  try {
-    // Get path from query parameter
-    const { path } = event.queryStringParameters || {};
-    
-    if (!path) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ error: 'Missing path parameter' }),
-      };
-    }
+  // Get path from query parameter
+  const { path } = event.queryStringParameters || {};
+  
+  if (!path) {
+    return {
+      statusCode: 400,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ error: 'Missing path parameter' }),
+    };
+  }
 
-    // FIX THE DOUBLE API PATH - remove extra /api if present
+  try {
+    // Fix the double API path issue - ensure clean path
     let cleanPath = path;
+    
+    // Remove leading /api/ or /api if present
     if (cleanPath.startsWith('/api/')) {
-      cleanPath = cleanPath.substring(5); // Remove '/api/'
+      cleanPath = cleanPath.substring(5);
     } else if (cleanPath.startsWith('/api')) {
-      cleanPath = cleanPath.substring(4); // Remove '/api'
+      cleanPath = cleanPath.substring(4);
     }
     
     // Ensure path starts with /
@@ -48,7 +50,6 @@ exports.handler = async (event) => {
     const backendURL = `${BACKEND_BASE_URL}/api${cleanPath}`;
     
     console.log(`[api-proxy] ${event.httpMethod} ${path} -> ${backendURL}`);
-    console.log(`[api-proxy] Backend base URL: ${BACKEND_BASE_URL}`);
 
     // Prepare headers
     const headers = {
@@ -67,8 +68,8 @@ exports.handler = async (event) => {
       headers,
     };
 
-    // Add body for POST, PUT requests
-    if (event.body && ['POST', 'PUT'].includes(event.httpMethod)) {
+    // Add body for POST, PUT, PATCH requests
+    if (event.body && ['POST', 'PUT', 'PATCH'].includes(event.httpMethod)) {
       fetchOptions.body = event.body;
     }
 
@@ -84,25 +85,26 @@ exports.handler = async (event) => {
       
       clearTimeout(timeoutId);
       
-      const data = await response.text();
+      // Get response data
+      const contentType = response.headers.get('content-type') || '';
+      let data;
       
-      // Try to parse as JSON
-      let body;
-      try {
-        body = JSON.parse(data);
-      } catch {
-        body = data;
+      if (contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        data = await response.text();
       }
 
+      // Return response with proper status code
       return {
         statusCode: response.status,
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-          'Content-Type': response.headers.get('content-type') || 'application/json',
+          'Content-Type': contentType || 'application/json',
         },
-        body: typeof body === 'string' ? body : JSON.stringify(body),
+        body: typeof data === 'string' ? data : JSON.stringify(data),
       };
     } catch (fetchError) {
       clearTimeout(timeoutId);
@@ -117,7 +119,8 @@ exports.handler = async (event) => {
           },
           body: JSON.stringify({ 
             error: 'Request timeout',
-            message: 'Backend server did not respond in time'
+            message: 'Backend server did not respond in time',
+            suggestion: 'Please try again later or check backend service status'
           }),
         };
       }
@@ -125,19 +128,20 @@ exports.handler = async (event) => {
     }
   } catch (error) {
     console.error('[api-proxy] Error:', error);
-    console.error('[api-proxy] Error name:', error?.name);
-    console.error('[api-proxy] Error message:', error?.message);
     console.error('[api-proxy] Backend URL:', BACKEND_BASE_URL);
-    console.error('[api-proxy] Path:', event.queryStringParameters?.path);
-    console.error('[api-proxy] Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    console.error('[api-proxy] Path:', path);
     
-    // Provide more helpful error messages
+    // Provide helpful error messages
     let errorMessage = 'Failed to connect to backend server';
+    let suggestion = 'Check backend service status';
+    
     if (error instanceof Error) {
       if (error.message.includes('ECONNREFUSED') || error.message.includes('ENOTFOUND')) {
-        errorMessage = 'Backend server is not reachable. Please check if the server is running.';
+        errorMessage = 'Backend server is not reachable';
+        suggestion = 'Please check if the backend service is running';
       } else if (error.message.includes('timeout')) {
-        errorMessage = 'Backend server did not respond in time.';
+        errorMessage = 'Backend server did not respond in time';
+        suggestion = 'Please try again later';
       } else {
         errorMessage = error.message;
       }
@@ -152,11 +156,10 @@ exports.handler = async (event) => {
       body: JSON.stringify({ 
         error: 'Bad Gateway',
         message: errorMessage,
+        suggestion,
         backendUrl: BACKEND_BASE_URL,
-        path: event.queryStringParameters?.path,
-        details: process.env.NODE_ENV === 'development' ? (error?.stack || JSON.stringify(error)) : undefined
+        path: path,
       }),
     };
   }
 };
-

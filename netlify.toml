@@ -11,6 +11,13 @@
 
 [functions]
   directory = "netlify/functions"
+  node_bundler = "esbuild"
+  
+[functions.api-proxy]
+  included_files = ["netlify/functions/api-proxy.js"]
+  
+[functions.health]
+  included_files = ["netlify/functions/health.js"]
 
 # Redirect all requests to index.html (SPA routing)
 # Netlify automatically handles /.netlify/functions/* routes, so they won't be caught by this redirect

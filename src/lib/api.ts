@@ -75,7 +75,7 @@ async function apiRequest<T>(
     const errorData = (await response
       .json()
       .catch(() => ({ error: 'Request failed' }))) as ApiErrorPayload;
-    const errorMessage = errorData.error || errorData.details || 'Request failed';
+    const errorMessage = errorData.error || errorData.details || errorData.message || 'Request failed';
     const enrichedError = new Error(errorMessage) as Error & {
       status?: number;
       code?: string;
@@ -124,7 +124,25 @@ export const authApi = {
     try {
       const user = await apiRequest<{ id: string; email: string }>('/auth/me');
       return user;
-    } catch {
+    } catch (error) {
+      const err = error as Error & { status?: number };
+      
+      // Handle 502 Bad Gateway - backend unavailable
+      if (err.status === 502) {
+        console.error('Auth service temporarily unavailable');
+        // Don't throw - return null to allow graceful degradation
+        return null;
+      }
+      
+      // Handle 401 Unauthorized - token expired or invalid
+      if (err.status === 401) {
+        // Clear invalid token
+        removeToken();
+        return null;
+      }
+      
+      // Log other errors but don't break the app
+      console.error('Auth error:', err);
       return null;
     }
   },
