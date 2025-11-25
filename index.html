@@ -102,10 +102,21 @@
     
   </head>
   <body>
+    <noscript>
+      <div style="padding: 40px; text-align: center; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+        <div>
+          <h1 style="font-size: 2rem; margin-bottom: 1rem;">JavaScript Required</h1>
+          <p style="font-size: 1.125rem;">Please enable JavaScript to use YoDoc.</p>
+        </div>
+      </div>
+    </noscript>
+    
     <div id="root">
       <!-- Initial loading state to prevent FOUC -->
-      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(to bottom right,#dbeafe,#eff6ff,#dbeafe)">
+      <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(to bottom right,#dbeafe,#eff6ff,#dbeafe);gap:1rem">
         <div class="loading-spinner"></div>
+        <p style="color:#4b5563;font-size:0.875rem">Loading YoDoc...</p>
+        <p style="color:#6b7280;font-size:0.75rem">If this takes too long, check your connection and refresh.</p>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>

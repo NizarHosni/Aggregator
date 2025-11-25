@@ -25,48 +25,82 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return user ? <>{children}</> : <Navigate to="/" replace />;
 }
 
-function App() {
+function NotFound() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <PhysicianSearch />
-              <PWAInstallPrompt />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/doctor/:npi"
-          element={
-            <ProtectedRoute>
-              <DoctorProfile />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/analytics"
-          element={
-            <ProtectedRoute>
-              <AnalyticsDashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <ProtectedRoute>
-              <SettingsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="/auth" element={<AuthForm />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-4">
+      <div className="text-center glass-card rounded-3xl p-12 shadow-professional-lg">
+        <h1 className="text-heading text-3xl mb-4">404</h1>
+        <p className="text-body text-lg mb-6">Page not found</p>
+        <a href="/" className="btn-primary">
+          Go to Homepage
+        </a>
+      </div>
+    </div>
   );
+}
+
+function App() {
+  // Add safety check for critical dependencies
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    return (
+      <BrowserRouter>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <PhysicianSearch />
+                <PWAInstallPrompt />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor/:npi"
+            element={
+              <ProtectedRoute>
+                <DoctorProfile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/analytics"
+            element={
+              <ProtectedRoute>
+                <AnalyticsDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/auth" element={<AuthForm />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    );
+  } catch (error) {
+    console.error('App render error:', error);
+    return (
+      <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-4">
+        <div className="text-center glass-card rounded-3xl p-12 shadow-professional-lg">
+          <h1 className="text-heading text-2xl mb-4">Error Loading App</h1>
+          <p className="text-body mb-6">Please refresh the page.</p>
+          <button onClick={() => window.location.reload()} className="btn-primary">
+            Reload Page
+          </button>
+        </div>
+      </div>
+    );
+  }
 }
 
 export default App;
