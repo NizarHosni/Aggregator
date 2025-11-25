@@ -7,6 +7,7 @@
   SECRETS_SCAN_OMIT_KEYS = "PORT,CLIENT_URL"
   SECRETS_SCAN_OMIT_PATHS = "render.yaml,railway.json,server/**,dist/**"
   VITE_API_URL = "https://physician-search-api-production.up.railway.app"
+  BACKEND_API_URL = "https://physician-search-api-production.up.railway.app"
 
 [functions]
   directory = "netlify/functions"

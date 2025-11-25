@@ -1,5 +1,5 @@
-// Backend API URL
-const BACKEND_BASE_URL = 'https://physician-search-api-production.up.railway.app';
+// Backend API URL - can be overridden via environment variable
+const BACKEND_BASE_URL = process.env.BACKEND_API_URL || 'https://physician-search-api-production.up.railway.app';
 
 exports.handler = async (event) => {
   // Handle CORS preflight
@@ -48,6 +48,7 @@ exports.handler = async (event) => {
     const backendURL = `${BACKEND_BASE_URL}/api${cleanPath}`;
     
     console.log(`[api-proxy] ${event.httpMethod} ${path} -> ${backendURL}`);
+    console.log(`[api-proxy] Backend base URL: ${BACKEND_BASE_URL}`);
 
     // Prepare headers
     const headers = {
@@ -124,8 +125,23 @@ exports.handler = async (event) => {
     }
   } catch (error) {
     console.error('[api-proxy] Error:', error);
+    console.error('[api-proxy] Error name:', error?.name);
+    console.error('[api-proxy] Error message:', error?.message);
     console.error('[api-proxy] Backend URL:', BACKEND_BASE_URL);
     console.error('[api-proxy] Path:', event.queryStringParameters?.path);
+    console.error('[api-proxy] Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    
+    // Provide more helpful error messages
+    let errorMessage = 'Failed to connect to backend server';
+    if (error instanceof Error) {
+      if (error.message.includes('ECONNREFUSED') || error.message.includes('ENOTFOUND')) {
+        errorMessage = 'Backend server is not reachable. Please check if the server is running.';
+      } else if (error.message.includes('timeout')) {
+        errorMessage = 'Backend server did not respond in time.';
+      } else {
+        errorMessage = error.message;
+      }
+    }
     
     return {
       statusCode: 502,
@@ -135,8 +151,10 @@ exports.handler = async (event) => {
       },
       body: JSON.stringify({ 
         error: 'Bad Gateway',
-        message: error instanceof Error ? error.message : 'Failed to connect to backend server',
-        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        message: errorMessage,
+        backendUrl: BACKEND_BASE_URL,
+        path: event.queryStringParameters?.path,
+        details: process.env.NODE_ENV === 'development' ? (error?.stack || JSON.stringify(error)) : undefined
       }),
     };
   }
