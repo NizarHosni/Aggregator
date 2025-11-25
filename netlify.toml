@@ -12,7 +12,6 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-  timeout = 10
 
 # Redirect all requests to index.html (SPA routing)
 # Netlify automatically handles /.netlify/functions/* routes, so they won't be caught by this redirect
