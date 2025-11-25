@@ -294,6 +294,7 @@ function MapIntegration({ doctors }: { doctors: SearchResult['results'] }) {
 const DEFAULT_RADIUS_METERS = 25000;
 
 export function PhysicianSearch() {
+  const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { addToHistory, saveSearchResults, getSearchResults, refreshHistory } = useSearchHistory();
   const [query, setQuery] = useState('');
