@@ -127,22 +127,16 @@ export const authApi = {
     } catch (error) {
       const err = error as Error & { status?: number };
       
-      // Handle 502 Bad Gateway - backend unavailable
-      if (err.status === 502) {
-        console.error('Auth service temporarily unavailable');
-        // Don't throw - return null to allow graceful degradation
-        return null;
-      }
-      
+      // NEVER THROW ERRORS - ALWAYS RETURN NULL TO PREVENT APP CRASHES
       // Handle 401 Unauthorized - token expired or invalid
       if (err.status === 401) {
-        // Clear invalid token
+        console.warn('Auth token expired or invalid');
         removeToken();
         return null;
       }
       
-      // Log other errors but don't break the app
-      console.error('Auth error:', err);
+      // All other errors (502, 500, network errors, etc.) - just return null
+      console.warn('Auth service unavailable:', err.message || 'Unknown error');
       return null;
     }
   },

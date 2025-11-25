@@ -21,27 +21,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is already logged in
+    // Check if user is already logged in - DON'T BLOCK APP LOADING
     const checkAuth = async () => {
       try {
-        const currentUser = await authApi.getCurrentUser();
-        setUser(currentUser);
-      } catch (error) {
-        // Handle 502 errors gracefully - don't clear user if service is temporarily down
-        const err = error as Error & { status?: number };
-        if (err.status === 502) {
-          // Service temporarily unavailable - keep existing user state if any
-          console.warn('Auth service temporarily unavailable');
-        } else {
-          // Other errors - clear user
-          setUser(null);
-        }
-      } finally {
+        // Set loading to false quickly to not block app
         setLoading(false);
+        
+        // Check auth in background (non-blocking)
+        const currentUser = await authApi.getCurrentUser();
+        if (currentUser) {
+          setUser(currentUser);
+        }
+      } catch (error) {
+        // NEVER THROW - just log and continue
+        console.warn('Auth check failed (non-blocking):', error);
+        setUser(null);
       }
     };
 
-    checkAuth();
+    // Don't wait for auth - set loading to false immediately
+    setLoading(false);
+    
+    // Check auth in background
+    void checkAuth();
   }, []);
 
   const signUp = async (email: string, password: string) => {

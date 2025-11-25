@@ -1,48 +1,33 @@
-// Backend API URL - must be set via environment variable
-// Get from environment variable (set in Netlify dashboard or netlify.toml)
-const BACKEND_BASE_URL = process.env.BACKEND_API_URL;
-
-if (!BACKEND_BASE_URL) {
-  console.error('[api-proxy] ERROR: BACKEND_API_URL environment variable is not set!');
-}
+// Simplified API Proxy - Hardcoded backend URL to eliminate env issues
+const BACKEND_BASE_URL = 'https://physician-search-api-production.up.railway.app';
 
 exports.handler = async (event) => {
-  // Validate backend URL is configured
-  if (!BACKEND_BASE_URL) {
-    return {
-      statusCode: 500,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        error: 'Configuration Error',
-        message: 'Backend API URL is not configured. Please set BACKEND_API_URL environment variable.',
-      }),
-    };
-  }
+  console.log('[api-proxy] Called:', event.httpMethod, event.queryStringParameters?.path);
+
+  // CORS headers
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  };
+
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Max-Age': '86400',
-      },
+      headers: corsHeaders,
       body: '',
     };
   }
 
   // Get path from query parameter
   const { path } = event.queryStringParameters || {};
-  
+
   if (!path) {
     return {
       statusCode: 400,
       headers: {
-        'Access-Control-Allow-Origin': '*',
+        ...corsHeaders,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ error: 'Missing path parameter' }),
@@ -50,96 +35,87 @@ exports.handler = async (event) => {
   }
 
   try {
-    // Fix the double API path issue - ensure clean path
+    // Clean path - remove leading slash if present, remove /api prefix if present
     let cleanPath = path;
-    
-    // Remove leading /api/ or /api if present
     if (cleanPath.startsWith('/api/')) {
       cleanPath = cleanPath.substring(5);
     } else if (cleanPath.startsWith('/api')) {
       cleanPath = cleanPath.substring(4);
-    }
-    
-    // Ensure path starts with /
-    if (!cleanPath.startsWith('/')) {
-      cleanPath = '/' + cleanPath;
+    } else if (cleanPath.startsWith('/')) {
+      cleanPath = cleanPath.substring(1);
     }
 
-    // Construct backend URL with single /api
-    const backendURL = `${BACKEND_BASE_URL}/api${cleanPath}`;
-    
-    console.log(`[api-proxy] ${event.httpMethod} ${path} -> ${backendURL}`);
+    // Construct backend URL
+    const backendURL = `${BACKEND_BASE_URL}/api/${cleanPath}`;
 
-    // Prepare headers
-    const headers = {
-      'Content-Type': 'application/json',
+    console.log('[api-proxy] Proxying to:', backendURL);
+
+    // Prepare request options
+    const options = {
+      method: event.httpMethod,
+      headers: {
+        'Content-Type': 'application/json',
+      },
     };
 
     // Forward Authorization header if present
     const authHeader = event.headers.authorization || event.headers.Authorization;
     if (authHeader) {
-      headers['Authorization'] = authHeader;
+      options.headers['Authorization'] = authHeader;
     }
 
-    // Prepare fetch options
-    const fetchOptions = {
-      method: event.httpMethod,
-      headers,
-    };
-
-    // Add body for POST, PUT, PATCH requests
-    if (event.body && ['POST', 'PUT', 'PATCH'].includes(event.httpMethod)) {
-      fetchOptions.body = event.body;
+    // Add body for non-GET requests
+    if (event.body && event.httpMethod !== 'GET') {
+      options.body = event.body;
     }
 
-    // Make request to backend with timeout
+    // Make request with timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
-    
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
     try {
       const response = await fetch(backendURL, {
-        ...fetchOptions,
+        ...options,
         signal: controller.signal,
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       // Get response data
       const contentType = response.headers.get('content-type') || '';
       let data;
-      
+
       if (contentType.includes('application/json')) {
         data = await response.json();
       } else {
         data = await response.text();
       }
 
-      // Return response with proper status code
+      // Return successful response
       return {
         statusCode: response.status,
         headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          ...corsHeaders,
           'Content-Type': contentType || 'application/json',
         },
         body: typeof data === 'string' ? data : JSON.stringify(data),
       };
     } catch (fetchError) {
       clearTimeout(timeoutId);
-      
+
       if (fetchError.name === 'AbortError') {
-        console.error('[api-proxy] Request timeout:', backendURL);
+        console.error('[api-proxy] Request timeout');
+        // Return 200 to prevent frontend crashes
         return {
-          statusCode: 504,
+          statusCode: 200,
           headers: {
-            'Access-Control-Allow-Origin': '*',
+            ...corsHeaders,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
+            success: false,
             error: 'Request timeout',
-            message: 'Backend server did not respond in time',
-            suggestion: 'Please try again later or check backend service status'
+            message: 'Service is taking longer than expected. Please try again.',
           }),
         };
       }
@@ -147,37 +123,21 @@ exports.handler = async (event) => {
     }
   } catch (error) {
     console.error('[api-proxy] Error:', error);
-    console.error('[api-proxy] Backend URL:', BACKEND_BASE_URL);
     console.error('[api-proxy] Path:', path);
-    
-    // Provide helpful error messages
-    let errorMessage = 'Failed to connect to backend server';
-    let suggestion = 'Check backend service status';
-    
-    if (error instanceof Error) {
-      if (error.message.includes('ECONNREFUSED') || error.message.includes('ENOTFOUND')) {
-        errorMessage = 'Backend server is not reachable';
-        suggestion = 'Please check if the backend service is running';
-      } else if (error.message.includes('timeout')) {
-        errorMessage = 'Backend server did not respond in time';
-        suggestion = 'Please try again later';
-      } else {
-        errorMessage = error.message;
-      }
-    }
-    
+
+    // RETURN 200 TO PREVENT FRONTEND CRASHES
+    // Always return 200 with error in body instead of 502
     return {
-      statusCode: 502,
+      statusCode: 200,
       headers: {
-        'Access-Control-Allow-Origin': '*',
+        ...corsHeaders,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ 
-        error: 'Bad Gateway',
-        message: errorMessage,
-        suggestion,
-        backendUrl: BACKEND_BASE_URL,
-        path: path,
+      body: JSON.stringify({
+        success: false,
+        error: 'Service temporarily unavailable',
+        message: 'Please try again in a few moments',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined,
       }),
     };
   }

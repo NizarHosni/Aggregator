@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { AuthForm } from './components/AuthForm';
@@ -40,6 +41,38 @@ function NotFound() {
 }
 
 function App() {
+  const [appReady, setAppReady] = useState(false);
+
+  useEffect(() => {
+    // Initialize app - don't block on auth
+    const initializeApp = async () => {
+      try {
+        // Small delay to ensure everything is ready
+        await new Promise(resolve => setTimeout(resolve, 100));
+        setAppReady(true);
+      } catch (error) {
+        console.error('App initialization error:', error);
+        // Still set ready - don't block app
+        setAppReady(true);
+      }
+    };
+
+    void initializeApp();
+  }, []);
+
+  // Show loading state
+  if (!appReady) {
+    return (
+      <div className="min-h-screen bg-gradient-subtle flex items-center justify-center">
+        <div className="text-center glass-card rounded-3xl p-12 shadow-professional-lg">
+          <div className="spinner-professional mx-auto mb-6" />
+          <h2 className="text-heading text-xl mb-2">Loading YoDoc...</h2>
+          <p className="text-body text-sm">Healthcare search platform</p>
+        </div>
+      </div>
+    );
+  }
+
   // Add safety check for critical dependencies
   if (typeof window === 'undefined') {
     return null;
