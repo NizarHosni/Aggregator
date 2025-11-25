@@ -38,8 +38,11 @@ export class ErrorBoundary extends Component<Props, State> {
     });
 
     // Log to error tracking service if available
-    if (typeof window !== 'undefined' && (window as any).Sentry) {
-      (window as any).Sentry.captureException(error);
+    if (typeof window !== 'undefined') {
+      const windowWithSentry = window as typeof window & { Sentry?: { captureException: (error: Error) => void } };
+      if (windowWithSentry.Sentry) {
+        windowWithSentry.Sentry.captureException(error);
+      }
     }
   }
 
