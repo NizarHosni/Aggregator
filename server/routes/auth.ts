@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { sql } from '../db/index.js';
-import { generateToken } from '../middleware/auth.js';
+import { generateToken, authenticateToken, AuthRequest } from '../middleware/auth.js';
 
 export const authRoutes = express.Router();
 
