@@ -1,7 +1,26 @@
-// Backend API URL - can be overridden via environment variable
-const BACKEND_BASE_URL = process.env.BACKEND_API_URL || 'https://physician-search-api-production.up.railway.app';
+// Backend API URL - must be set via environment variable
+// Get from environment variable (set in Netlify dashboard or netlify.toml)
+const BACKEND_BASE_URL = process.env.BACKEND_API_URL;
+
+if (!BACKEND_BASE_URL) {
+  console.error('[api-proxy] ERROR: BACKEND_API_URL environment variable is not set!');
+}
 
 exports.handler = async (event) => {
+  // Validate backend URL is configured
+  if (!BACKEND_BASE_URL) {
+    return {
+      statusCode: 500,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        error: 'Configuration Error',
+        message: 'Backend API URL is not configured. Please set BACKEND_API_URL environment variable.',
+      }),
+    };
+  }
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return {
