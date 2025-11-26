@@ -294,6 +294,70 @@ html {
   justify-content: center;
 }
 
+/* Source Links Styling */
+.source-links {
+  margin-top: 16px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border-left: 4px solid #2563eb;
+}
+
+.source-links-title {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.links-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.source-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  text-decoration: none;
+  color: #374151;
+  font-size: 12px;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.source-link:hover {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+}
+
+.source-link span:first-child {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* Practice Info Styling */
+.practice-info {
+  background: #f0f9ff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin: 8px 0;
+  border-left: 3px solid #0ea5e9;
+}
+
+.practice-info strong {
+  color: #0c4a6e;
+  font-size: 14px;
+}
+
 .error-fallback button {
   background: #2563eb;
   color: white;

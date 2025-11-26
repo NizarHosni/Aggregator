@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Phone, MapPin, Star, Clock, ShieldCheck, Video, Building2, GraduationCap, Award, Languages, Accessibility } from 'lucide-react';
+import { ArrowLeft, Phone, MapPin, Star, Clock, ShieldCheck, Video, Building2, GraduationCap, Award, Languages, Accessibility, ExternalLink } from 'lucide-react';
 import { AppointmentBookingCard } from './AppointmentBooking';
 import { ReviewScorecard } from './ReviewScorecard';
+import { normalizeDoctorData, getDoctorSources, extractPracticeInfo } from '../utils/doctorUtils';
 
 interface DoctorProfileData {
   name: string;
@@ -51,7 +52,7 @@ export function DoctorProfile() {
           rating: 4.8,
           years_experience: 15,
           npi: npi,
-          acceptedInsurances: ['Aetna', 'Blue Shield', 'Medicare', 'United Healthcare'],
+          acceptedInsurances: ['Aetna', 'Blue Shield', 'Medicare', 'United Healthcare'], // Aetna is correct here (insurance company)
           telehealth: true,
           inPerson: true,
           afterHours: false,
@@ -80,7 +81,9 @@ export function DoctorProfile() {
           ],
         };
 
-        setDoctor(mockProfile);
+        // Normalize doctor data (fix typos)
+        const normalizedProfile = normalizeDoctorData(mockProfile);
+        setDoctor(normalizedProfile);
       } catch (err) {
         console.error('Failed to load doctor profile:', err);
         setError('Failed to load doctor profile. Please try again.');
@@ -133,6 +136,24 @@ export function DoctorProfile() {
             <div className="flex-1">
               <h1 className="text-heading text-3xl mb-2">{doctor.name}</h1>
               <p className="text-subheading text-xl mb-4">{doctor.specialty}</p>
+              
+              {/* Practice Information */}
+              {(() => {
+                const practiceInfo = extractPracticeInfo({
+                  practice: { name: 'Sound Retina', phone: doctor.phone },
+                });
+                return practiceInfo.name ? (
+                  <div className="practice-info mb-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-lg">🏥</span>
+                      <strong className="text-heading">{practiceInfo.name}</strong>
+                    </div>
+                    {practiceInfo.type && (
+                      <p className="text-body text-sm text-gray-600">{practiceInfo.type}</p>
+                    )}
+                  </div>
+                ) : null;
+              })()}
               
               <div className="flex flex-wrap gap-4 mb-6">
                 <div className="flex items-center gap-2 text-body">
@@ -292,6 +313,39 @@ export function DoctorProfile() {
 
             {/* Reviews */}
             {doctor.npi && <ReviewScorecard doctorNpi={doctor.npi} />}
+
+            {/* Source Links */}
+            {(() => {
+              const sources = getDoctorSources({
+                npi: doctor.npi,
+                name: doctor.name,
+                specialty: doctor.specialty,
+              });
+              return sources.length > 0 ? (
+                <div className="glass-card rounded-2xl p-6">
+                  <h2 className="text-heading text-xl mb-4 flex items-center gap-2">
+                    <ExternalLink className="w-5 h-5 text-blue-600" />
+                    Verified Sources
+                  </h2>
+                  <div className="source-links">
+                    <div className="links-grid">
+                      {sources.map((source, index) => (
+                        <a 
+                          key={index}
+                          href={source.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="source-link"
+                        >
+                          <span>{source.icon}</span>
+                          <span className="truncate">{source.label}</span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : null;
+            })()}
           </div>
 
           {/* Sidebar */}

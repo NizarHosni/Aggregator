@@ -8,6 +8,7 @@ import { SearchHistory } from './SearchHistory';
 import { useSEO } from '../hooks/useSEO';
 import { AppointmentBookingCard } from './AppointmentBooking';
 import { ReviewScorecard } from './ReviewScorecard';
+import { normalizeDoctorData, getDoctorSources, extractPracticeInfo, PracticeInfo, DoctorSource } from '../utils/doctorUtils';
 
 interface SearchResult {
   query: string;
@@ -52,6 +53,13 @@ interface DoctorCardProps {
     telehealth?: boolean;
     inPerson?: boolean;
     afterHours?: boolean;
+    googlePlaceId?: string;
+    healthgradesId?: string;
+    website?: string;
+    practice?: { name?: string; phone?: string };
+    googleData?: { business_name?: string };
+    nppesData?: { practice_name?: string };
+    healthgradesData?: { practice_name?: string };
   };
   index: number;
 }
@@ -148,6 +156,22 @@ function DoctorCard({ doctor, index }: DoctorCardProps) {
   const [deepSearchLoading, setDeepSearchLoading] = useState(false);
   const [deepSearchError, setDeepSearchError] = useState<string | null>(null);
 
+  // Normalize doctor data (fix typos)
+  const normalizedDoctor = normalizeDoctorData(doctor);
+  
+  // Extract practice information
+  const practiceInfo = extractPracticeInfo(doctor);
+  
+  // Get source links
+  const sources = getDoctorSources({
+    npi: doctor.npi,
+    name: doctor.name,
+    specialty: doctor.specialty,
+    googlePlaceId: doctor.googlePlaceId,
+    healthgradesId: doctor.healthgradesId,
+    website: doctor.website,
+  });
+
   const runDeepSearch = async () => {
     if (deepSearchLoading) return;
     setDeepSearchLoading(true);
@@ -173,13 +197,13 @@ function DoctorCard({ doctor, index }: DoctorCardProps) {
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-teal-500 flex items-center justify-center text-white font-bold text-lg shadow-lg">
-              {doctor.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+              {normalizedDoctor.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-heading text-lg mb-1 truncate">{doctor.name}</h3>
+              <h3 className="text-heading text-lg mb-1 truncate">{normalizedDoctor.name}</h3>
               <p className="text-body text-sm flex items-center gap-2">
                 <Stethoscope className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                <span className="truncate">{doctor.specialty}</span>
+                <span className="truncate">{normalizedDoctor.specialty}</span>
               </p>
             </div>
           </div>
@@ -187,33 +211,76 @@ function DoctorCard({ doctor, index }: DoctorCardProps) {
       </div>
 
       <div className="space-y-3">
+        {/* Practice Information */}
+        {practiceInfo.name && (
+          <div className="practice-info">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-lg">🏥</span>
+              <strong className="text-heading text-sm">{practiceInfo.name}</strong>
+              {practiceInfo.verified && (
+                <span className="text-xs text-blue-600" title="Verified by multiple sources">✓</span>
+              )}
+            </div>
+            {practiceInfo.phone && (
+              <p className="text-body text-xs flex items-center gap-1">
+                <Phone className="w-3 h-3" />
+                {practiceInfo.phone}
+              </p>
+            )}
+            {practiceInfo.type && (
+              <p className="text-body text-xs text-gray-600">{practiceInfo.type}</p>
+            )}
+          </div>
+        )}
+
         <div className="flex items-start gap-2 text-body text-sm">
           <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-          <span className="line-clamp-2">{doctor.location}</span>
+          <span className="line-clamp-2">{normalizedDoctor.location}</span>
         </div>
 
         <div className="flex items-center gap-2 text-body text-sm">
           <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
           <a 
-            href={`tel:${doctor.phone}`} 
+            href={`tel:${normalizedDoctor.phone}`} 
             className="text-blue-600 hover:text-blue-700 font-medium transition-colors"
           >
-            {doctor.phone}
+            {normalizedDoctor.phone}
           </a>
         </div>
 
         <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
-          {doctor.rating > 0 && (
+          {normalizedDoctor.rating > 0 && (
             <div className="flex items-center gap-1 badge-rating">
               <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-              <span className="font-semibold">{doctor.rating.toFixed(1)}</span>
+              <span className="font-semibold">{normalizedDoctor.rating.toFixed(1)}</span>
             </div>
           )}
           <div className="badge-experience">
             <Clock className="w-3 h-3 inline mr-1" />
-            <span>{doctor.years_experience}+ years</span>
+            <span>{normalizedDoctor.years_experience}+ years</span>
           </div>
         </div>
+
+        {/* Source Links */}
+        {sources.length > 0 && (
+          <div className="source-links">
+            <h4 className="source-links-title">🔍 Verified Sources:</h4>
+            <div className="links-grid">
+              {sources.map((source, sourceIndex) => (
+                <a 
+                  key={sourceIndex}
+                  href={source.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="source-link"
+                >
+                  <span>{source.icon}</span>
+                  <span className="truncate">{source.label}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
         <button
           onClick={runDeepSearch}
           disabled={deepSearchLoading}
@@ -238,9 +305,9 @@ function DoctorCard({ doctor, index }: DoctorCardProps) {
           <DeepSearchPanel data={deepSearchData} />
         )}
 
-        {doctor.npi && (
+        {normalizedDoctor.npi && (
           <button
-            onClick={() => navigate(`/doctor/${doctor.npi}`)}
+            onClick={() => navigate(`/doctor/${normalizedDoctor.npi}`)}
             className="w-full mt-4 btn-secondary text-sm justify-center flex items-center gap-2"
           >
             <ExternalLink className="w-4 h-4" />
@@ -248,8 +315,8 @@ function DoctorCard({ doctor, index }: DoctorCardProps) {
           </button>
         )}
 
-        <ReviewScorecard doctorNpi={doctor.npi} />
-        <AppointmentBookingCard doctor={doctor} />
+        <ReviewScorecard doctorNpi={normalizedDoctor.npi} />
+        <AppointmentBookingCard doctor={normalizedDoctor} />
       </div>
     </div>
   );
