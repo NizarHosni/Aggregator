@@ -1310,9 +1310,11 @@ Only return valid JSON, no other text.`;
           if (extractedName.firstName) {
             const match = advancedNameMatching(searchFullName, doctorFullName);
             nameMatch = match.match && match.score >= 70;
-          } else {
+          } else if (extractedName.lastName) {
             // Just check last name
             nameMatch = doctor.basic.last_name?.toLowerCase() === extractedName.lastName.toLowerCase();
+          } else {
+            nameMatch = false;
           }
           
           // Specialty matching if we have a specialty
