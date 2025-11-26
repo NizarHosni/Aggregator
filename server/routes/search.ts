@@ -9,6 +9,7 @@ import {
   rankSearchResults,
   extractNameFromQuery,
   extractLocationFromQuery,
+  matchSpecialty,
 } from '../utils/searchUtils.js';
 
 export const searchRoutes = express.Router();
@@ -1232,9 +1233,34 @@ Only return valid JSON, no other text.`;
       }
     }
 
-    // Attempt 2: Remove location constraint if no results
-    if (nppesResults.length === 0 && (city || state)) {
+    // Attempt 2: Try last name only (handles "A. Kopstein", "Andrew M. Kopstein", etc.)
+    if (nppesResults.length === 0 && extractedName.lastName) {
       searchAttempt = 2;
+      nppesResults = await searchNPPES(
+        null, // Remove first name constraint
+        extractedName.lastName,
+        specialty,
+        city,
+        state
+      );
+      console.log(`Search attempt ${searchAttempt}: NPPES returned ${nppesResults.length} results (last name only)`);
+      nppesResults = filterActiveNppesResults(nppesResults);
+      
+      // If we got results, filter by advanced name matching
+      if (nppesResults.length > 0 && extractedName.firstName) {
+        const searchFullName = `${extractedName.firstName} ${extractedName.lastName}`;
+        nppesResults = nppesResults.filter(doctor => {
+          const doctorFullName = `${doctor.basic.first_name || ''} ${doctor.basic.last_name || ''}`.trim();
+          const match = advancedNameMatching(searchFullName, doctorFullName);
+          return match.match && match.score >= 70; // Require 70%+ confidence
+        });
+        console.log(`After name matching filter: ${nppesResults.length} results`);
+      }
+    }
+
+    // Attempt 3: Remove location constraint if no results
+    if (nppesResults.length === 0 && (city || state)) {
+      searchAttempt = 3;
       nppesResults = await searchNPPES(
         extractedName.firstName,
         extractedName.lastName,
@@ -1244,11 +1270,68 @@ Only return valid JSON, no other text.`;
       );
       console.log(`Search attempt ${searchAttempt}: NPPES returned ${nppesResults.length} results (without location)`);
       nppesResults = filterActiveNppesResults(nppesResults);
+      
+      // Apply name matching if we have a name
+      if (nppesResults.length > 0 && extractedName.firstName && extractedName.lastName) {
+        const searchFullName = `${extractedName.firstName} ${extractedName.lastName}`;
+        nppesResults = nppesResults.filter(doctor => {
+          const doctorFullName = `${doctor.basic.first_name || ''} ${doctor.basic.last_name || ''}`.trim();
+          const match = advancedNameMatching(searchFullName, doctorFullName);
+          return match.match && match.score >= 70;
+        });
+        console.log(`After name matching filter: ${nppesResults.length} results`);
+      }
+    }
+    
+    // Attempt 3.5: Last name only, no location, no specialty
+    if (nppesResults.length === 0 && extractedName.lastName) {
+      searchAttempt = 3.5;
+      nppesResults = await searchNPPES(
+        null,
+        extractedName.lastName,
+        null, // Remove specialty constraint
+        city,
+        state
+      );
+      console.log(`Search attempt ${searchAttempt}: NPPES returned ${nppesResults.length} results (last name + location, no specialty)`);
+      nppesResults = filterActiveNppesResults(nppesResults);
+      
+      // Filter by name and specialty matching
+      if (nppesResults.length > 0 && extractedName.lastName) {
+        const searchFullName = extractedName.firstName && extractedName.lastName 
+          ? `${extractedName.firstName} ${extractedName.lastName}` 
+          : extractedName.lastName;
+        
+        nppesResults = nppesResults.filter(doctor => {
+          const doctorFullName = `${doctor.basic.first_name || ''} ${doctor.basic.last_name || ''}`.trim();
+          
+          // Name matching
+          let nameMatch = true;
+          if (extractedName.firstName) {
+            const match = advancedNameMatching(searchFullName, doctorFullName);
+            nameMatch = match.match && match.score >= 70;
+          } else {
+            // Just check last name
+            nameMatch = doctor.basic.last_name?.toLowerCase() === extractedName.lastName.toLowerCase();
+          }
+          
+          // Specialty matching if we have a specialty
+          let specialtyMatch = true;
+          if (specialty) {
+            const primaryTaxonomy = doctor.taxonomies.find(tax => tax.primary) || doctor.taxonomies[0];
+            const doctorSpecialty = primaryTaxonomy?.desc || '';
+            specialtyMatch = matchSpecialty(specialty, doctorSpecialty) >= 50;
+          }
+          
+          return nameMatch && specialtyMatch;
+        });
+        console.log(`After name + specialty matching filter: ${nppesResults.length} results`);
+      }
     }
 
-    // Attempt 3: Try specialty-only search if we have specialty but no name
+    // Attempt 4: Try specialty-only search if we have specialty but no name
     if (nppesResults.length === 0 && specialty && (!extractedName.firstName && !extractedName.lastName)) {
-      searchAttempt = 3;
+      searchAttempt = 4;
       if (city || state) {
         nppesResults = await searchNPPES(
           null,
@@ -1262,9 +1345,9 @@ Only return valid JSON, no other text.`;
       }
     }
 
-    // Attempt 4: Try with alternative specialty terms, broader categories, or related specialties
+    // Attempt 5: Try with alternative specialty terms, broader categories, or related specialties
     if (nppesResults.length === 0) {
-      searchAttempt = 4;
+      searchAttempt = 5;
       
       // Try broader specialty category first
       if (specialty) {
