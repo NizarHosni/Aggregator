@@ -42,7 +42,7 @@ type ApiErrorPayload = {
   code?: string;
 };
 
-// API request helper
+// API request helper with 401 handling
 async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -70,6 +70,28 @@ async function apiRequest<T>(
     ...options,
     headers,
   });
+
+  // Handle 401 Unauthorized - redirect to login
+  if (response.status === 401) {
+    // Clear invalid token
+    removeToken();
+    
+    // Only redirect if we're not already on the auth page
+    if (typeof window !== 'undefined' && !window.location.pathname.includes('/auth')) {
+      // Store the current path to return after login
+      const returnPath = window.location.pathname + window.location.search;
+      window.location.href = `/auth?return=${encodeURIComponent(returnPath)}`;
+    }
+    
+    const errorMessage = 'Authentication required. Please log in.';
+    const enrichedError = new Error(errorMessage) as Error & {
+      status?: number;
+      code?: string;
+    };
+    enrichedError.status = 401;
+    enrichedError.code = 'UNAUTHORIZED';
+    throw enrichedError;
+  }
 
   // Parse response
   const responseData = await response.json().catch(() => ({ error: 'Request failed' })) as ApiErrorPayload & { success?: boolean; message?: string };
@@ -134,19 +156,18 @@ export const authApi = {
   },
 
   async getCurrentUser() {
-    // SILENT AUTH CHECK - DON'T THROW ERRORS
     try {
       const token = getToken();
       
-      // NO TOKEN = NO AUTH CHECK, RETURN NULL IMMEDIATELY
+      // NO TOKEN = NOT AUTHENTICATED
       if (!token || token === 'undefined' || token === 'null' || token.trim() === '') {
         return null;
       }
       
-      // SILENT AUTH CHECK - DON'T BLOCK APP
+      // Validate token with backend
       const user = await apiRequest<{ id: string; email: string }>('/auth/me');
       
-      // If response indicates guest mode, return null
+      // If response is invalid, return null
       if (!user || !user.id) {
         removeToken();
         return null;
@@ -156,16 +177,14 @@ export const authApi = {
     } catch (error) {
       const err = error as Error & { status?: number };
       
-      // NEVER THROW ERRORS - ALWAYS RETURN NULL TO PREVENT APP CRASHES
-      // Handle all error cases silently
+      // 401/403 means invalid token - already handled by apiRequest (redirects to login)
       if (err.status === 401 || err.status === 403) {
-        console.warn('Auth token expired or invalid, continuing as guest');
         removeToken();
         return null;
       }
       
-      // All other errors (502, 500, network errors, etc.) - just return null silently
-      console.warn('Auth service unavailable, continuing as guest:', err.message || 'Unknown error');
+      // Network errors - return null but don't redirect
+      console.warn('Auth service unavailable:', err.message || 'Unknown error');
       return null;
     }
   },

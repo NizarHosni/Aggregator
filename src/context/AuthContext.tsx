@@ -21,42 +21,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // GUEST MODE BY DEFAULT - DON'T BLOCK APP LOADING
+    // AUTHENTICATION REQUIRED - Check auth status on mount
     const checkAuth = async () => {
-      // Set loading to false immediately to not block app
-      setLoading(false);
+      setLoading(true);
       
-      // Check auth in background (non-blocking) with delay
-      setTimeout(async () => {
-        try {
-          const token = localStorage.getItem('auth_token');
-          
-          // NO TOKEN = NO AUTH CHECK, PROCEED AS GUEST
-          if (!token || token === 'undefined' || token === 'null' || token.trim() === '') {
-            console.log('No auth token found, proceeding as guest');
-            setUser(null);
-            return;
-          }
-          
-          // SILENT AUTH CHECK - DON'T BLOCK APP
-          const currentUser = await authApi.getCurrentUser();
-          if (currentUser && currentUser.id) {
-            setUser(currentUser);
-          } else {
-            setUser(null);
-          }
-        } catch (error) {
-          // NEVER THROW - just log and continue as guest
-          console.warn('Auth check failed (non-blocking), continuing as guest:', error);
+      try {
+        const token = localStorage.getItem('auth_token');
+        
+        // NO TOKEN = NOT AUTHENTICATED
+        if (!token || token === 'undefined' || token === 'null' || token.trim() === '') {
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+        
+        // Validate token with backend
+        const currentUser = await authApi.getCurrentUser();
+        if (currentUser && currentUser.id) {
+          setUser(currentUser);
+        } else {
           setUser(null);
         }
-      }, 100); // Small delay to ensure app renders first
+      } catch (error) {
+        // Error already handled by apiRequest (redirects to login if 401)
+        console.warn('Auth check failed:', error);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    // Don't wait for auth - set loading to false immediately
-    setLoading(false);
-    
-    // Check auth in background
     void checkAuth();
   }, []);
 
@@ -87,8 +81,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    authApi.signOut();
-    setUser(null);
+    try {
+      // Clear token and user state
+      authApi.signOut();
+      setUser(null);
+      
+      // Redirect to login page
+      if (typeof window !== 'undefined') {
+        window.location.href = '/auth';
+      }
+    } catch (error) {
+      // Even if signOut fails, clear local state and redirect
+      console.warn('Error during sign out, clearing local state:', error);
+      setUser(null);
+      
+      // Clear token manually as fallback
+      try {
+        localStorage.removeItem('auth_token');
+      } catch (e) {
+        // Ignore localStorage errors
+      }
+      
+      // Still redirect to login
+      if (typeof window !== 'undefined') {
+        window.location.href = '/auth';
+      }
+    }
   };
 
   return (

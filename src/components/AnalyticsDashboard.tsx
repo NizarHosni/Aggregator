@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, TrendingUp, Users, Search, Calendar, DollarSign, BarChart3, Activity } from 'lucide-react';
 import { analyticsApi } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 
 interface AnalyticsData {
   patientMetrics: {
@@ -29,11 +30,24 @@ interface AnalyticsData {
 
 export function AnalyticsDashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
 
   const [error, setError] = useState<string | null>(null);
+
+  // Redirect to home if no user (guest mode)
+  useEffect(() => {
+    if (!user) {
+      navigate('/');
+    }
+  }, [user, navigate]);
+
+  // Show loading or redirect message if no user
+  if (!user) {
+    return null; // Will redirect via useEffect
+  }
 
   useEffect(() => {
     const fetchAnalytics = async () => {

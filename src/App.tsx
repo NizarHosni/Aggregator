@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { AuthForm } from './components/AuthForm';
 import { PhysicianSearch } from './components/PhysicianSearch';
@@ -9,19 +9,29 @@ import { SettingsPage } from './components/SettingsPage';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { loading } = useAuth();
+  const { user, loading } = useAuth();
+  const location = useLocation();
 
-  // Don't block on loading - show content immediately
-  // Auth check happens in background
-  // ALLOW GUEST ACCESS - Don't redirect if no user
+  // Show loading state while checking auth
   if (loading) {
-    // Show content with minimal delay
-    return <>{children}</>;
+    return (
+      <div className="min-h-screen bg-gradient-subtle flex items-center justify-center">
+        <div className="text-center glass-card rounded-3xl p-12 shadow-professional-lg">
+          <div className="spinner-professional mx-auto mb-6" />
+          <h2 className="text-heading text-xl mb-2">Loading...</h2>
+          <p className="text-body text-sm">Checking authentication...</p>
+        </div>
+      </div>
+    );
   }
 
-  // GUEST MODE: Allow access even without user
-  // Only redirect for truly protected routes (like analytics)
-  // For now, allow all routes in guest mode
+  // AUTHENTICATION REQUIRED - Redirect to login if not authenticated
+  if (!user) {
+    // Store the current path to return after login
+    const returnPath = location.pathname + location.search;
+    return <Navigate to={`/auth?return=${encodeURIComponent(returnPath)}`} replace />;
+  }
+
   return <>{children}</>;
 }
 

@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { LogIn, UserPlus, Stethoscope, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export function AuthForm() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -12,6 +15,16 @@ export function AuthForm() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { signUp, signIn } = useAuth();
+
+  // Redirect to home if already authenticated
+  useEffect(() => {
+    if (user) {
+      // Get return path from URL or default to home
+      const urlParams = new URLSearchParams(window.location.search);
+      const returnPath = urlParams.get('return') || '/';
+      navigate(returnPath, { replace: true });
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,10 +56,16 @@ export function AuthForm() {
 
       if (error) {
         setError(error.message);
+        setLoading(false);
+      } else {
+        // Success - get return path from URL or default to home
+        const urlParams = new URLSearchParams(window.location.search);
+        const returnPath = urlParams.get('return') || '/';
+        navigate(returnPath, { replace: true });
+        // Note: setLoading(false) not needed as navigate will unmount component
       }
     } catch (err) {
       setError('An unexpected error occurred');
-    } finally {
       setLoading(false);
     }
   };

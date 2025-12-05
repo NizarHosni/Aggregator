@@ -647,12 +647,20 @@ export function PhysicianSearch() {
                 <Settings className="w-4 h-4" />
                 Settings
               </button>
-              <div className="hidden sm:flex items-center gap-2 text-sm text-body px-3 py-2 rounded-lg bg-white/50">
-                <User className="w-4 h-4" />
-                <span className="max-w-[150px] truncate">{user?.email}</span>
-              </div>
+              {user && (
+                <div className="hidden sm:flex items-center gap-2 text-sm text-body px-3 py-2 rounded-lg bg-white/50">
+                  <User className="w-4 h-4" />
+                  <span className="max-w-[150px] truncate">{user.email}</span>
+                </div>
+              )}
               <button
-                onClick={signOut}
+                onClick={async () => {
+                  try {
+                    await signOut();
+                  } catch (error) {
+                    console.warn('Error during sign out:', error);
+                  }
+                }}
                 className="btn-secondary text-sm py-2 px-4"
               >
                 <LogOut className="w-4 h-4 inline mr-2" />

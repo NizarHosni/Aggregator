@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Settings, Shield, Crown, Gift, Lock, FileText, Bell } from 'lucide-react';
 import { PremiumFeatures } from './PremiumFeatures';
@@ -9,7 +9,20 @@ type Tab = 'premium' | 'referral' | 'security' | 'privacy';
 
 export function SettingsPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('premium');
+
+  // Redirect to home if no user (guest mode)
+  useEffect(() => {
+    if (!user) {
+      navigate('/');
+    }
+  }, [user, navigate]);
+
+  // Show loading or redirect message if no user
+  if (!user) {
+    return null; // Will redirect via useEffect
+  }
 
   const tabs = [
     { id: 'premium' as Tab, label: 'Premium', icon: <Crown className="w-4 h-4" /> },
