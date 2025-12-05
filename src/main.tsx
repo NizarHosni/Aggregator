@@ -1,9 +1,9 @@
 import React, { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
-import './index.css'; // Vite will extract this to a separate file during build
-import { AuthProvider } from './context/AuthContext';
+import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { StackAuthProvider } from './context/StackAuthProvider';
 import { checkBrowserCompatibility, showBrowserIncompatibility } from './utils/browserCheck';
 
 // PREVENT EXTERNAL SCRIPTS FROM BREAKING THE APP
@@ -43,35 +43,8 @@ window.addEventListener('unhandledrejection', (event) => {
   return false;
 });
 
-// Detect and mitigate browser extensions
-const disableProblematicExtensions = () => {
-  // Check for known problematic extensions
-  const problematicSelectors = [
-    '[class*="adunit"]',
-    '[id*="adunit"]',
-    '[src*="draggable.js"]',
-    '[src*="recorder.js"]',
-  ];
-  
-  problematicSelectors.forEach(selector => {
-    try {
-      document.querySelectorAll(selector).forEach(el => {
-        (el as HTMLElement).style.display = 'none';
-        el.remove();
-      });
-    } catch (e) {
-      // Silent fail
-    }
-  });
-};
-
-// Call on app start
-if (typeof window !== 'undefined') {
-  disableProblematicExtensions();
-}
-
 // Debug logging
-console.log('🚀 App Starting...');
+console.log('🚀 YoDoc Healthcare Search - Starting...');
 console.log('Build Environment:', import.meta.env.MODE);
 console.log('API URL:', import.meta.env.VITE_API_URL);
 console.log('React Version:', React.version);
@@ -107,9 +80,9 @@ try {
   root.render(
     <StrictMode>
       <ErrorBoundary>
-        <AuthProvider>
+        <StackAuthProvider>
           <App />
-        </AuthProvider>
+        </StackAuthProvider>
       </ErrorBoundary>
     </StrictMode>
   );
@@ -143,7 +116,7 @@ try {
           font-weight: 600;
           cursor: pointer;
         ">Reload Page</button>
-        ${process.env.NODE_ENV === 'development' ? `<pre style="margin-top: 2rem; text-align: left; font-size: 0.875rem;">${error}</pre>` : ''}
+        ${import.meta.env.DEV ? `<pre style="margin-top: 2rem; text-align: left; font-size: 0.875rem;">${error}</pre>` : ''}
       </div>
     </div>
   `;

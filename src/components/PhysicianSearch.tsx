@@ -1,10 +1,13 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, LogOut, User, Stethoscope, Copy, Check, AlertCircle, Phone, MapPin, Star, Clock, ChevronDown, Loader2, ExternalLink, BarChart3, Settings } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { Search, Stethoscope, Copy, Check, AlertCircle, Phone, MapPin, Star, Clock, ChevronDown, Loader2, ExternalLink, Heart } from 'lucide-react';
+import { UserButton } from '@stackframe/stack';
 import { useSearchHistory } from '../hooks/useSearchHistory';
-import { useAdmin } from '../hooks/useAdmin';
+import { useFavorites } from '../hooks/useFavorites';
+import { usePreferences } from '../hooks/usePreferences';
 import { SearchHistory } from './SearchHistory';
+import { PreferencesMenu } from './PreferencesMenu';
+import { SearchResultsSkeleton } from './SkeletonLoader';
 import { useSEO } from '../hooks/useSEO';
 import { AppointmentBookingCard } from './AppointmentBooking';
 import { ReviewScorecard } from './ReviewScorecard';
@@ -62,6 +65,8 @@ interface DoctorCardProps {
     healthgradesData?: { practice_name?: string };
   };
   index: number;
+  isFavorited?: boolean;
+  onToggleFavorite?: () => void;
 }
 
 interface DeepSearchData {
@@ -139,7 +144,7 @@ function DeepSearchPanel({ data }: { data: DeepSearchData }) {
             {data.reviews.map((review, idx) => (
               <div key={idx} className="text-sm text-body">
                 <p className="font-semibold text-gray-900">{review.source}</p>
-                <p className="text-gray-600">“{review.snippet}”</p>
+                <p className="text-gray-600">"{review.snippet}"</p>
               </div>
             ))}
           </div>
@@ -149,12 +154,13 @@ function DeepSearchPanel({ data }: { data: DeepSearchData }) {
   );
 }
 
-function DoctorCard({ doctor, index }: DoctorCardProps) {
+function DoctorCard({ doctor, index, isFavorited = false, onToggleFavorite }: DoctorCardProps) {
   const navigate = useNavigate();
   const [showDeepInfo, setShowDeepInfo] = useState(false);
   const [deepSearchData, setDeepSearchData] = useState<DeepSearchData | null>(null);
   const [deepSearchLoading, setDeepSearchLoading] = useState(false);
   const [deepSearchError, setDeepSearchError] = useState<string | null>(null);
+  const [favoriteAnimation, setFavoriteAnimation] = useState(false);
 
   // Normalize doctor data (fix typos)
   const normalizedDoctor = normalizeDoctorData(doctor);
@@ -188,11 +194,36 @@ function DoctorCard({ doctor, index }: DoctorCardProps) {
     }
   };
 
+  const handleFavoriteClick = () => {
+    if (onToggleFavorite) {
+      onToggleFavorite();
+      setFavoriteAnimation(true);
+      setTimeout(() => setFavoriteAnimation(false), 600);
+    }
+  };
+
   return (
     <div 
-      className="doctor-card animate-fade-in"
+      className="doctor-card animate-fade-in relative"
       style={{ animationDelay: `${index * 0.05}s` }}
     >
+      {/* Favorite Button */}
+      {doctor.npi && onToggleFavorite && (
+        <button
+          onClick={handleFavoriteClick}
+          className={`absolute top-4 right-4 z-10 p-2 rounded-full transition-all duration-300 ${
+            isFavorited 
+              ? 'bg-pink-100 hover:bg-pink-200 text-pink-600' 
+              : 'bg-white/80 hover:bg-white text-gray-400 hover:text-pink-600'
+          } ${favoriteAnimation ? 'animate-bounce' : ''}`}
+          title={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+        >
+          <Heart 
+            className={`w-5 h-5 transition-all ${isFavorited ? 'fill-pink-600' : ''}`}
+          />
+        </button>
+      )}
+
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
@@ -327,9 +358,9 @@ function SearchGuidance() {
     <div className="search-guidance glass-card p-4 rounded-2xl border border-blue-100 space-y-3">
       <h3 className="text-subheading text-sm">How to search for doctors</h3>
       <ul className="space-y-2 text-sm text-body">
-        <li>✅ <strong>Doctor Name + Location</strong> (e.g., “Dr. Smith in Seattle”)</li>
-        <li>✅ <strong>Doctor Name + Specialty</strong> (e.g., “Mark Nelson retina surgeon”)</li>
-        <li>✅ <strong>Specialty + Location</strong> (e.g., “Cardiologist Tacoma”)</li>
+        <li>✅ <strong>Doctor Name + Location</strong> (e.g., "Dr. Smith in Seattle")</li>
+        <li>✅ <strong>Doctor Name + Specialty</strong> (e.g., "Mark Nelson retina surgeon")</li>
+        <li>✅ <strong>Specialty + Location</strong> (e.g., "Cardiologist Tacoma")</li>
         <li>❌ Specialty alone (needs a location)</li>
         <li>❌ Location alone (needs a specialty or doctor name)</li>
       </ul>
@@ -363,9 +394,9 @@ const DEFAULT_RADIUS_METERS = 25000;
 
 export function PhysicianSearch() {
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
-  const { isAdmin } = useAdmin();
   const { addToHistory, saveSearchResults, getSearchResults, refreshHistory } = useSearchHistory();
+  const { isFavorited, toggleFavorite } = useFavorites();
+  const { preferences } = usePreferences();
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -402,9 +433,9 @@ export function PhysicianSearch() {
 
     try {
       const { searchApi } = await import('../lib/api');
-      const radiusInMeters = DEFAULT_RADIUS_METERS;
+      const radiusInMeters = preferences.searchRadius || DEFAULT_RADIUS_METERS;
       const trimmedQuery = query.trim();
-      const results = await searchApi.searchPhysicians(trimmedQuery, radiusInMeters, page, 15);
+      const results = await searchApi.searchPhysicians(trimmedQuery, radiusInMeters, page, preferences.resultsPerPage || 15);
 
       if (page === 1) {
         // First page - replace results
@@ -415,7 +446,9 @@ export function PhysicianSearch() {
         setCurrentSearchQuery(results.query);
         setCurrentSearchLocation(getLocationText(results.location));
 
-        // Save to history (this triggers backend save)
+        // Save to history with timestamp as ID
+        const historyId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
         await addToHistory(
           results.query,
           results.specialty,
@@ -423,36 +456,23 @@ export function PhysicianSearch() {
           results.resultsCount
         );
 
-        // Refresh history to get the new history item ID
-        await refreshHistory();
+        // Refresh history to get the new item
+        refreshHistory();
         
-        // Small delay to ensure backend has saved
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Small delay to ensure localStorage is updated
+        await new Promise(resolve => setTimeout(resolve, 50));
         
-        // Get the most recent history item to save results with its ID
-        const { historyApi } = await import('../lib/api');
-        const historyList = await historyApi.getHistory();
-        if (historyList.length > 0) {
-          // Find the history item that matches this search (by query and recent timestamp)
-          const latestHistoryItem = historyList.find(item => 
-            item.query === results.query && 
-            new Date(item.created_at).getTime() > Date.now() - 5000 // Within last 5 seconds
-          ) || historyList[0]; // Fallback to first item if no match
-          
-          const latestHistoryId = latestHistoryItem.id;
-          
-          // Save full results to localStorage
-          saveSearchResults(latestHistoryId, {
-            query: results.query,
-            specialty: results.specialty,
-            location: results.location,
-            results: results.results,
-            resultsCount: results.resultsCount,
-            searchRadius: results.searchRadius,
-            pagination: results.pagination,
-            timestamp: new Date().toISOString(),
-          });
-        }
+        // Save full results to localStorage
+        saveSearchResults(historyId, {
+          query: results.query,
+          specialty: results.specialty,
+          location: results.location,
+          results: results.results,
+          resultsCount: results.resultsCount,
+          searchRadius: results.searchRadius,
+          pagination: results.pagination,
+          timestamp: new Date().toISOString(),
+        });
       } else {
         // Subsequent pages - append results
         setAllResults(prev => [...prev, ...results.results]);
@@ -468,32 +488,11 @@ export function PhysicianSearch() {
       const err = error as Error & { message?: string; status?: number; code?: string };
       console.error('Search error:', err);
       
-      // Handle 401/403 - expired or invalid token
-      if (err.status === 401 || err.status === 403 || err.code === 'UNAUTHORIZED') {
-        // Token expired/invalid - apiRequest will handle redirect
-        // Just show error message briefly before redirect
-        if (page === 1) {
-          setSearchResults({
-            query: query,
-            specialty: 'Unknown',
-            location: null,
-            results: [],
-            resultsCount: 0,
-            error: err.message || 'Your session has expired. Redirecting to login...',
-          });
-        }
-        setSearching(false);
-        setLoadingMore(false);
-        return;
-      }
-      
       let errorMessage = 'Search failed. Please try again.';
 
       const message = err.message || '';
       if (message.includes('quota') || message.includes('429')) {
         errorMessage = 'OpenAI API quota exceeded. The search will use fallback results, but they may be limited. Please check your OpenAI account billing.';
-      } else if (message.includes('Authentication required')) {
-        errorMessage = 'Authentication required. Please log in to search.';
       } else if (message) {
         errorMessage = message;
       }
@@ -522,8 +521,8 @@ export function PhysicianSearch() {
 
     try {
       const { searchApi } = await import('../lib/api');
-      const radiusInMeters = DEFAULT_RADIUS_METERS;
-      const results = await searchApi.searchPhysicians(searchResults.query, radiusInMeters, nextPage, 15);
+      const radiusInMeters = preferences.searchRadius || DEFAULT_RADIUS_METERS;
+      const results = await searchApi.searchPhysicians(searchResults.query, radiusInMeters, nextPage, preferences.resultsPerPage || 15);
 
       setAllResults(prev => [...prev, ...results.results]);
       setCurrentPage(nextPage);
@@ -651,42 +650,16 @@ export function PhysicianSearch() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              {isAdmin && (
-                <button
-                  onClick={() => navigate('/analytics')}
-                  className="btn-secondary text-sm py-2 px-4 hidden sm:flex items-center gap-2"
-                >
-                  <BarChart3 className="w-4 h-4" />
-                  Analytics
-                </button>
-              )}
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => navigate('/settings')}
-                className="btn-secondary text-sm py-2 px-4 hidden sm:flex items-center gap-2"
+                onClick={() => navigate('/favorites')}
+                className="btn-secondary text-sm py-2 px-4 flex items-center gap-2"
               >
-                <Settings className="w-4 h-4" />
-                Settings
+                <Heart className="w-4 h-4" />
+                <span className="hidden sm:inline">Favorites</span>
               </button>
-              {user && (
-                <div className="hidden sm:flex items-center gap-2 text-sm text-body px-3 py-2 rounded-lg bg-white/50">
-                  <User className="w-4 h-4" />
-                  <span className="max-w-[150px] truncate">{user.email}</span>
-                </div>
-              )}
-              <button
-                onClick={async () => {
-                  try {
-                    await signOut();
-                  } catch (error) {
-                    console.warn('Error during sign out:', error);
-                  }
-                }}
-                className="btn-secondary text-sm py-2 px-4"
-              >
-                <LogOut className="w-4 h-4 inline mr-2" />
-                <span className="hidden sm:inline">Sign Out</span>
-              </button>
+              <PreferencesMenu />
+              <UserButton />
             </div>
           </div>
         </div>
@@ -743,6 +716,17 @@ export function PhysicianSearch() {
             </p>
           </div>
         </div>
+
+        {/* Loading State - Show Skeletons */}
+        {searching && !searchResults && (
+          <div className="glass-card-strong rounded-3xl p-6 sm:p-8 mb-8 shadow-professional-lg animate-fade-in">
+            <div className="flex items-center gap-3 mb-6">
+              <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+              <h2 className="text-heading text-xl sm:text-2xl">Searching...</h2>
+            </div>
+            <SearchResultsSkeleton />
+          </div>
+        )}
 
         {/* Search Results */}
         {searchResults && (
@@ -830,7 +814,23 @@ export function PhysicianSearch() {
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
                   {allResults.map((doctor, index) => (
-                    <DoctorCard key={`${doctor.npi || doctor.name}-${index}`} doctor={doctor} index={index} />
+                    <DoctorCard 
+                      key={`${doctor.npi || doctor.name}-${index}`} 
+                      doctor={doctor} 
+                      index={index}
+                      isFavorited={doctor.npi ? isFavorited(doctor.npi) : false}
+                      onToggleFavorite={doctor.npi ? async () => {
+                        await toggleFavorite({
+                          npi: doctor.npi!,
+                          name: doctor.name,
+                          specialty: doctor.specialty,
+                          location: doctor.location,
+                          phone: doctor.phone,
+                          rating: doctor.rating,
+                          years_experience: doctor.years_experience,
+                        });
+                      } : undefined}
+                    />
                   ))}
                 </div>
 

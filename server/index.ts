@@ -1,16 +1,16 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { authRoutes } from './routes/auth.js';
 import { searchRoutes } from './routes/search.js';
-import { historyRoutes } from './routes/history.js';
 import { appointmentRoutes } from './routes/appointments.js';
 import { insuranceRoutes } from './routes/insurance.js';
 import { reviewsRoutes } from './routes/reviews.js';
-import { analyticsRoutes } from './routes/analytics.js';
-import { monetizationRoutes } from './routes/monetization.js';
+import { authRoutes } from './routes/auth.js';
+import { historyRoutes } from './routes/history.js';
+import { favoritesRoutes } from './routes/favorites.js';
 import { securityHeaders, rateLimit } from './middleware/security.js';
 import { initDatabase } from './db/index.js';
 
@@ -45,6 +45,13 @@ console.log('🌐 CORS Configuration:');
 console.log('   Allowed origins:', allowedOrigins);
 console.log('   NODE_ENV:', process.env.NODE_ENV || 'not set');
 
+// Log rate limit configuration
+const isDev = process.env.NODE_ENV === 'development';
+console.log('🚦 Rate Limiting:');
+console.log(`   General API: ${isDev ? '10,000' : '200'} requests per 15 minutes`);
+console.log(`   Search API: ${isDev ? '1,000' : '50'} requests per minute`);
+console.log(`   Appointments: ${isDev ? '500' : '20'} requests per minute`);
+
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
@@ -71,37 +78,29 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.use(express.json());
+app.use(cookieParser());
 
 // Security middleware
 app.use(securityHeaders);
 
-// Rate limiting
-app.use('/api/', rateLimit(100, 15 * 60 * 1000)); // 100 requests per 15 minutes
-app.use('/api/search/', rateLimit(20, 60 * 1000)); // 20 searches per minute
-app.use('/api/appointments/', rateLimit(10, 60 * 1000)); // 10 bookings per minute
+// Rate limiting - very generous for development, adjust for production
+const isDevelopment = process.env.NODE_ENV === 'development';
+app.use('/api/', rateLimit(isDevelopment ? 10000 : 200, 15 * 60 * 1000)); // Dev: 10k per 15min, Prod: 200 per 15min
+app.use('/api/search/', rateLimit(isDevelopment ? 1000 : 50, 60 * 1000)); // Dev: 1000/min, Prod: 50/min
+app.use('/api/appointments/', rateLimit(isDevelopment ? 500 : 20, 60 * 1000)); // Dev: 500/min, Prod: 20/min
 
 // Root endpoint - redirect to API info
 app.get('/', (req, res) => {
   res.json({
-    message: 'AI Physician Search API',
-    version: '1.0.0',
+    message: 'YoDoc Healthcare Search API',
+    version: '2.0.0',
     status: 'online',
     documentation: '/api',
     health: '/api/health',
     endpoints: {
       health: '/api/health',
-      auth: {
-        signup: 'POST /api/auth/signup',
-        signin: 'POST /api/auth/signin',
-        me: 'GET /api/auth/me',
-      },
       search: {
         physicians: 'POST /api/search/physicians',
-      },
-      history: {
-        list: 'GET /api/history',
-        delete: 'DELETE /api/history/:id',
-        clear: 'DELETE /api/history',
       },
       appointments: {
         availability: 'POST /api/appointments/availability',
@@ -114,20 +113,6 @@ app.get('/', (req, res) => {
       reviews: {
         list: 'GET /api/reviews/:doctorNpi',
         create: 'POST /api/reviews',
-      },
-      analytics: {
-        metrics: 'GET /api/analytics/metrics?timeRange=7d|30d|90d',
-      },
-      monetization: {
-        subscription: 'GET /api/monetization/subscription',
-        upgrade: 'POST /api/monetization/subscription/upgrade',
-        referral: {
-          generate: 'POST /api/monetization/referral/generate',
-          apply: 'POST /api/monetization/referral/apply',
-          stats: 'GET /api/monetization/referral/stats',
-        },
-        practice: 'GET /api/monetization/practice/features',
-        enterprise: 'POST /api/monetization/enterprise/inquiry',
       },
     },
   });
@@ -136,22 +121,12 @@ app.get('/', (req, res) => {
 // API root endpoint
 app.get('/api', (req, res) => {
   res.json({
-    message: 'AI Physician Search API',
-    version: '1.0.0',
+    message: 'YoDoc Healthcare Search API - Core Search Only',
+    version: '2.0.0',
     endpoints: {
       health: '/api/health',
-      auth: {
-        signup: 'POST /api/auth/signup',
-        signin: 'POST /api/auth/signin',
-        me: 'GET /api/auth/me',
-      },
       search: {
         physicians: 'POST /api/search/physicians',
-      },
-      history: {
-        list: 'GET /api/history',
-        delete: 'DELETE /api/history/:id',
-        clear: 'DELETE /api/history',
       },
       appointments: {
         availability: 'POST /api/appointments/availability',
@@ -165,50 +140,50 @@ app.get('/api', (req, res) => {
         list: 'GET /api/reviews/:doctorNpi',
         create: 'POST /api/reviews',
       },
-      analytics: {
-        metrics: 'GET /api/analytics/metrics?timeRange=7d|30d|90d',
-      },
-      monetization: {
-        subscription: 'GET /api/monetization/subscription',
-        upgrade: 'POST /api/monetization/subscription/upgrade',
-        referral: {
-          generate: 'POST /api/monetization/referral/generate',
-          apply: 'POST /api/monetization/referral/apply',
-          stats: 'GET /api/monetization/referral/stats',
-        },
-        practice: 'GET /api/monetization/practice/features',
-        enterprise: 'POST /api/monetization/enterprise/inquiry',
-      },
     },
   });
 });
 
 // Routes
-app.use('/api/auth', authRoutes);
 app.use('/api/search', searchRoutes);
-app.use('/api/history', historyRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/insurance', insuranceRoutes);
 app.use('/api/reviews', reviewsRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/monetization', monetizationRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/history', historyRoutes);
+app.use('/api/favorites', favoritesRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok' });
+  res.json({ 
+    status: 'ok',
+    version: '2.0.0',
+    timestamp: new Date().toISOString(),
+  });
 });
 
-// Initialize database and start server
+// Start server
 async function startServer() {
   try {
-    console.log('🔄 Initializing database...');
+    console.log('🚀 Starting YoDoc Healthcare Search API...');
+    console.log('📦 Version: 3.0.0 - With Stack Auth');
+    
+    // Initialize database
     await initDatabase();
     console.log('✅ Database initialized');
     
     const server = app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
+      console.log(`✅ Server running on http://localhost:${PORT}`);
       console.log(`📡 API available at http://localhost:${PORT}/api`);
       console.log(`💚 Health check: http://localhost:${PORT}/api/health`);
+      console.log('');
+      console.log('🔍 Features:');
+      console.log('   - Physician Search (GPT-4 + NPPES + Google Places)');
+      console.log('   - Appointment Booking');
+      console.log('   - Insurance Verification');
+      console.log('   - Reviews & Ratings');
+      console.log('   - Stack Auth Authentication');
+      console.log('   - Database-synced History & Favorites');
     });
 
     // Graceful shutdown handler for Railway and other platforms
@@ -256,4 +231,3 @@ async function startServer() {
 }
 
 startServer();
-

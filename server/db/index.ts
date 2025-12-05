@@ -21,59 +21,32 @@ if (!databaseUrl) {
 export const sql = neon(databaseUrl);
 
 // Initialize database schema
+// Note: Tables are created via migrations, this just ensures indexes exist
 export async function initDatabase() {
   try {
-    console.log('📊 Creating database tables...');
+    console.log('📊 Verifying database schema...');
     
-    // Create users table (for authentication)
-    await sql`
-      CREATE TABLE IF NOT EXISTS users (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        email text UNIQUE NOT NULL,
-        password_hash text NOT NULL,
-        created_at timestamptz DEFAULT now()
-      )
-    `;
-    console.log('✅ Users table ready');
-
-    // Create profiles table
-    await sql`
-      CREATE TABLE IF NOT EXISTS profiles (
-        id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-        email text NOT NULL,
-        created_at timestamptz DEFAULT now()
-      )
-    `;
-    console.log('✅ Profiles table ready');
-
-    // Create search_history table
-    await sql`
-      CREATE TABLE IF NOT EXISTS search_history (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        query text NOT NULL,
-        specialty text,
-        location text,
-        results_count integer DEFAULT 0,
-        created_at timestamptz DEFAULT now()
-      )
-    `;
-    console.log('✅ Search history table ready');
-
-    // Create indexes
-    await sql`
-      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)
-    `;
+    // Ensure indexes exist (tables should already exist from migrations)
     await sql`
       CREATE INDEX IF NOT EXISTS idx_search_history_user_id ON search_history(user_id)
     `;
     await sql`
       CREATE INDEX IF NOT EXISTS idx_search_history_created_at ON search_history(created_at DESC)
     `;
-    console.log('✅ Database indexes ready');
+    await sql`
+      CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON favorite_doctors(user_id)
+    `;
+    await sql`
+      CREATE INDEX IF NOT EXISTS idx_favorites_npi ON favorite_doctors(npi)
+    `;
+    await sql`
+      CREATE INDEX IF NOT EXISTS idx_favorites_created_at ON favorite_doctors(created_at DESC)
+    `;
+    console.log('✅ Database indexes verified');
   } catch (error) {
     console.error('❌ Error initializing database:', error);
-    throw error;
+    // Don't throw - tables might already exist from migrations
+    console.warn('⚠️  Continuing anyway - tables may already exist');
   }
 }
 

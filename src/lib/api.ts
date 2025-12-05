@@ -21,42 +21,47 @@ if (import.meta.env.DEV) {
   console.log('🌍 Environment:', import.meta.env.MODE);
 }
 
-// Get auth token from localStorage
-function getToken(): string | null {
-  return localStorage.getItem('auth_token');
-}
-
-// Set auth token in localStorage
-function setToken(token: string): void {
-  localStorage.setItem('auth_token', token);
-}
-
-// Remove auth token from localStorage
-function removeToken(): void {
-  localStorage.removeItem('auth_token');
-}
-
 type ApiErrorPayload = {
   error?: string;
   details?: string;
   code?: string;
 };
 
-// API request helper with 401 handling
+// Get auth token from Stack Auth (if available)
+async function getAuthToken(): Promise<string | null> {
+  try {
+    // Stack Auth stores tokens in cookies automatically
+    // For API requests, we'll use the cookie-based auth
+    // If we need to send token in header, we can get it from Stack client
+    const { stackClientApp } = await import('./stack');
+    const user = await stackClientApp.getUser();
+    if (user) {
+      // Stack Auth handles token automatically via cookies
+      // But we can also get it explicitly if needed
+      return null; // Cookie-based auth, no need for header token
+    }
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Simplified API request helper with optional authentication
 async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = getToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> || {}),
   };
 
-  // Always include token if available - don't skip it
-  if (token && token !== 'undefined' && token !== 'null' && token.trim() !== '') {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
+  // Add credentials for cookie-based auth
+  const requestOptions: RequestInit = {
+    ...options,
+    headers,
+    credentials: 'include', // Include cookies for Stack Auth
+  };
 
   // If using proxy, add path as query parameter
   let url: string;
@@ -67,45 +72,7 @@ async function apiRequest<T>(
     url = `${API_URL}${endpoint}`;
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  // Handle 401/403 Unauthorized - expired or invalid tokens
-  if (response.status === 401 || response.status === 403) {
-    // Always clear invalid/expired token immediately
-    removeToken();
-    
-    // Don't redirect if we're checking auth status (would cause infinite loop)
-    const isAuthEndpoint = endpoint === '/auth/me' || endpoint === '/auth/is-admin';
-    
-    if (!isAuthEndpoint) {
-      // Only redirect if we're not already on the auth page
-      if (typeof window !== 'undefined' && !window.location.pathname.includes('/auth')) {
-        // Use a flag to prevent multiple redirects - clear any stale flags first
-        const redirectKey = 'auth_redirect_in_progress';
-        const isRedirecting = sessionStorage.getItem(redirectKey);
-        
-        if (!isRedirecting) {
-          sessionStorage.setItem(redirectKey, 'true');
-          // Store the current path to return after login
-          const returnPath = window.location.pathname + window.location.search;
-          // Use replace to prevent back button issues
-          window.location.replace(`/auth?return=${encodeURIComponent(returnPath)}`);
-        }
-      }
-    }
-    
-    const errorMessage = 'Your session has expired. Please log in again.';
-    const enrichedError = new Error(errorMessage) as Error & {
-      status?: number;
-      code?: string;
-    };
-    enrichedError.status = response.status;
-    enrichedError.code = 'UNAUTHORIZED';
-    throw enrichedError;
-  }
+  const response = await fetch(url, requestOptions);
 
   // Parse response
   const responseData = await response.json().catch(() => ({ error: 'Request failed' })) as ApiErrorPayload & { success?: boolean; message?: string };
@@ -139,85 +106,6 @@ async function apiRequest<T>(
   return responseData as T;
 }
 
-// Auth API
-export const authApi = {
-  async signUp(email: string, password: string) {
-    const data = await apiRequest<{ user: { id: string; email: string }; token: string }>(
-      '/auth/signup',
-      {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      }
-    );
-    setToken(data.token);
-    return { user: data.user, error: null };
-  },
-
-  async signIn(email: string, password: string) {
-    try {
-      const data = await apiRequest<{ user: { id: string; email: string }; token: string }>(
-        '/auth/signin',
-        {
-          method: 'POST',
-          body: JSON.stringify({ email, password }),
-        }
-      );
-      setToken(data.token);
-      return { user: data.user, error: null };
-    } catch (error) {
-      return { user: null, error: error as Error };
-    }
-  },
-
-  async getCurrentUser() {
-    try {
-      const token = getToken();
-      
-      // NO TOKEN = NOT AUTHENTICATED
-      if (!token || token === 'undefined' || token === 'null' || token.trim() === '') {
-        return null;
-      }
-      
-      // Validate token with backend - but don't redirect on 401 for this endpoint
-      // We'll handle redirect in ProtectedRoute instead
-      const user = await apiRequest<{ id: string; email: string }>('/auth/me');
-      
-      // If response is invalid, return null
-      if (!user || !user.id) {
-        removeToken();
-        return null;
-      }
-      
-      return user;
-    } catch (error) {
-      const err = error as Error & { status?: number; code?: string };
-      
-      // 401/403 means invalid token - clear it but don't redirect (prevent loop)
-      if (err.status === 401 || err.status === 403) {
-        removeToken();
-        return null;
-      }
-      
-      // Network errors - return null but don't redirect
-      console.warn('Auth service unavailable:', err.message || 'Unknown error');
-      return null;
-    }
-  },
-
-  signOut() {
-    removeToken();
-  },
-
-  async isAdmin() {
-    try {
-      const result = await apiRequest<{ isAdmin: boolean }>('/auth/is-admin');
-      return result.isAdmin;
-    } catch {
-      return false;
-    }
-  },
-};
-
 // Search API
 export const searchApi = {
   async searchPhysicians(query: string, radius?: number, page: number = 1, pageSize: number = 15) {
@@ -233,6 +121,13 @@ export const searchApi = {
         rating: number;
         years_experience: number;
         npi?: string;
+        googlePlaceId?: string;
+        healthgradesId?: string;
+        website?: string;
+        practice?: { name?: string; phone?: string };
+        googleData?: { business_name?: string };
+        nppesData?: { practice_name?: string };
+        healthgradesData?: { practice_name?: string };
       }>;
       resultsCount: number;
       error?: string | null;
@@ -252,36 +147,7 @@ export const searchApi = {
   },
 };
 
-// History API
-export type SearchHistory = {
-  id: string;
-  user_id: string;
-  query: string;
-  specialty: string | null;
-  location: string | null;
-  results_count: number;
-  created_at: string;
-};
-
-export const historyApi = {
-  async getHistory(): Promise<SearchHistory[]> {
-    return apiRequest<SearchHistory[]>('/history');
-  },
-
-  async deleteHistoryItem(id: string): Promise<void> {
-    await apiRequest(`/history/${id}`, {
-      method: 'DELETE',
-    });
-  },
-
-  async clearHistory(): Promise<void> {
-    await apiRequest('/history', {
-      method: 'DELETE',
-    });
-  },
-};
-
-// Appointment & Insurance APIs
+// Appointment & Insurance APIs (keep for future use, but simplified)
 export type AppointmentSlot = {
   id: string;
   start: string;
@@ -401,104 +267,131 @@ export const reviewsApi = {
   },
 };
 
-export const analyticsApi = {
-  async getMetrics(timeRange: '7d' | '30d' | '90d' = '30d') {
-    return apiRequest<{
-      patientMetrics: {
-        totalSearches: number;
-        searchConversionRate: number;
-        appointmentBookings: number;
-        patientRetentionRate: number;
-        geographicDemand: Array<{ location: string; count: number }>;
-      };
-      doctorMetrics: {
-        profileCompletions: number;
-        patientAcquisitionCost: number;
-        averageSatisfactionScore: number;
-        bookingUtilization: number;
-        topDoctors: Array<{ name: string; views: number; bookings: number }>;
-      };
-      revenueMetrics: {
-        totalRevenue: number;
-        monthlyRecurringRevenue: number;
-        averageRevenuePerUser: number;
-        revenueGrowth: number;
-      };
-    }>(`/analytics/metrics?timeRange=${timeRange}`, {
-      method: 'GET',
-    });
+// History API (with database sync)
+export type SearchHistoryItem = {
+  id: string;
+  query: string;
+  specialty: string | null;
+  location: string | null;
+  results_count: number;
+  created_at: string;
+};
+
+export const historyApi = {
+  async getHistory(): Promise<SearchHistoryItem[]> {
+    try {
+      const response = await apiRequest<{ history: SearchHistoryItem[] }>('/history', {
+        method: 'GET',
+      });
+      return response.history;
+    } catch (error) {
+      // If not authenticated, return empty array
+      return [];
+    }
+  },
+
+  async addHistory(query: string, specialty: string | null, location: string | null, results_count: number) {
+    try {
+      const response = await apiRequest<{ historyItem: SearchHistoryItem }>('/history', {
+        method: 'POST',
+        body: JSON.stringify({ query, specialty, location, results_count }),
+      });
+      return response.historyItem;
+    } catch (error) {
+      // Silently fail if not authenticated
+      return null;
+    }
+  },
+
+  async deleteHistoryItem(id: string): Promise<void> {
+    try {
+      await apiRequest(`/history/${id}`, {
+        method: 'DELETE',
+      });
+    } catch (error) {
+      // Silently fail if not authenticated
+    }
+  },
+
+  async clearHistory(): Promise<void> {
+    try {
+      await apiRequest('/history', {
+        method: 'DELETE',
+      });
+    } catch (error) {
+      // Silently fail if not authenticated
+    }
   },
 };
 
-export const monetizationApi = {
-  async getSubscription() {
-    return apiRequest<{
-      id: string;
-      userId: string;
-      tier: 'free' | 'premium' | 'enterprise';
-      features: string[];
-      referralCode?: string;
-    }>('/monetization/subscription', {
-      method: 'GET',
-    });
+// Favorites API (with database sync)
+export type FavoriteDoctor = {
+  id?: string;
+  npi: string;
+  name: string;
+  specialty: string;
+  location: string;
+  phone: string;
+  rating: number;
+  years_experience: number;
+  google_place_id?: string;
+  healthgrades_id?: string;
+  website?: string;
+  created_at?: string;
+};
+
+export const favoritesApi = {
+  async getFavorites(): Promise<FavoriteDoctor[]> {
+    try {
+      const response = await apiRequest<{ favorites: FavoriteDoctor[] }>('/favorites', {
+        method: 'GET',
+      });
+      return response.favorites;
+    } catch (error) {
+      // If not authenticated, return empty array
+      return [];
+    }
   },
 
-  async upgradeSubscription(tier: 'premium' | 'enterprise') {
-    return apiRequest<{
-      message: string;
-      subscription: {
-        id: string;
-        userId: string;
-        tier: 'free' | 'premium' | 'enterprise';
-        features: string[];
-      };
-    }>('/monetization/subscription/upgrade', {
-      method: 'POST',
-      body: JSON.stringify({ tier }),
-    });
+  async addFavorite(doctor: FavoriteDoctor) {
+    try {
+      const response = await apiRequest<{ favorite: FavoriteDoctor }>('/favorites', {
+        method: 'POST',
+        body: JSON.stringify(doctor),
+      });
+      return response.favorite;
+    } catch (error) {
+      // Silently fail if not authenticated
+      return null;
+    }
   },
 
-  async generateReferralCode() {
-    return apiRequest<{
-      referralCode: string;
-      referralLink: string;
-      message: string;
-    }>('/monetization/referral/generate', {
-      method: 'POST',
-    });
-  },
-
-  async applyReferralCode(referralCode: string) {
-    return apiRequest<{
-      message: string;
-      subscription: {
-        id: string;
-        userId: string;
-        tier: 'free' | 'premium' | 'enterprise';
-        features: string[];
-      };
-    }>('/monetization/referral/apply', {
-      method: 'POST',
-      body: JSON.stringify({ referralCode }),
-    });
-  },
-
-  async getReferralStats() {
-    return apiRequest<{
-      referralCode: string | null;
-      referralLink: string;
-      totalReferrals: number;
-      activeReferrals: number;
-      rewards: Array<{
-        referredId: string;
-        reward: string;
-        date: string;
-      }>;
-    }>('/monetization/referral/stats', {
-      method: 'GET',
-    });
+  async removeFavorite(npi: string): Promise<void> {
+    try {
+      await apiRequest(`/favorites/${npi}`, {
+        method: 'DELETE',
+      });
+    } catch (error) {
+      // Silently fail if not authenticated
+    }
   },
 };
 
-export { getToken, setToken, removeToken, API_URL };
+// Auth API
+export const authApi = {
+  async getCurrentUser() {
+    try {
+      return await apiRequest<{
+        id: string;
+        email: string;
+        displayName?: string;
+      }>('/auth/me', {
+        method: 'GET',
+      });
+    } catch (error) {
+      return null;
+    }
+  },
+};
 
+export { API_URL };
