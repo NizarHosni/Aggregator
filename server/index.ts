@@ -80,6 +80,59 @@ app.use('/api/', rateLimit(100, 15 * 60 * 1000)); // 100 requests per 15 minutes
 app.use('/api/search/', rateLimit(20, 60 * 1000)); // 20 searches per minute
 app.use('/api/appointments/', rateLimit(10, 60 * 1000)); // 10 bookings per minute
 
+// Root endpoint - redirect to API info
+app.get('/', (req, res) => {
+  res.json({
+    message: 'AI Physician Search API',
+    version: '1.0.0',
+    status: 'online',
+    documentation: '/api',
+    health: '/api/health',
+    endpoints: {
+      health: '/api/health',
+      auth: {
+        signup: 'POST /api/auth/signup',
+        signin: 'POST /api/auth/signin',
+        me: 'GET /api/auth/me',
+      },
+      search: {
+        physicians: 'POST /api/search/physicians',
+      },
+      history: {
+        list: 'GET /api/history',
+        delete: 'DELETE /api/history/:id',
+        clear: 'DELETE /api/history',
+      },
+      appointments: {
+        availability: 'POST /api/appointments/availability',
+        book: 'POST /api/appointments/book',
+      },
+      insurance: {
+        verify: 'POST /api/insurance/verify',
+        plans: 'GET /api/insurance/plans',
+      },
+      reviews: {
+        list: 'GET /api/reviews/:doctorNpi',
+        create: 'POST /api/reviews',
+      },
+      analytics: {
+        metrics: 'GET /api/analytics/metrics?timeRange=7d|30d|90d',
+      },
+      monetization: {
+        subscription: 'GET /api/monetization/subscription',
+        upgrade: 'POST /api/monetization/subscription/upgrade',
+        referral: {
+          generate: 'POST /api/monetization/referral/generate',
+          apply: 'POST /api/monetization/referral/apply',
+          stats: 'GET /api/monetization/referral/stats',
+        },
+        practice: 'GET /api/monetization/practice/features',
+        enterprise: 'POST /api/monetization/enterprise/inquiry',
+      },
+    },
+  });
+});
+
 // API root endpoint
 app.get('/api', (req, res) => {
   res.json({
