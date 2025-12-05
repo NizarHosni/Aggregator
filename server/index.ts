@@ -152,11 +152,46 @@ async function startServer() {
     await initDatabase();
     console.log('✅ Database initialized');
     
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);
       console.log(`📡 API available at http://localhost:${PORT}/api`);
       console.log(`💚 Health check: http://localhost:${PORT}/api/health`);
     });
+
+    // Graceful shutdown handler for Railway and other platforms
+    const gracefulShutdown = (signal: string) => {
+      console.log(`\n📛 Received ${signal}, shutting down gracefully...`);
+      
+      server.close(() => {
+        console.log('✅ HTTP server closed');
+        console.log('👋 Goodbye!');
+        process.exit(0);
+      });
+
+      // Force shutdown after 10 seconds
+      setTimeout(() => {
+        console.error('⚠️  Forced shutdown after timeout');
+        process.exit(1);
+      }, 10000);
+    };
+
+    // Handle shutdown signals
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+    // Handle uncaught exceptions
+    process.on('uncaughtException', (error) => {
+      console.error('❌ Uncaught Exception:', error);
+      gracefulShutdown('uncaughtException');
+    });
+
+    // Handle unhandled promise rejections
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+      gracefulShutdown('unhandledRejection');
+    });
+
+    return server;
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     if (error instanceof Error) {
