@@ -24,19 +24,36 @@ export function ReferralProgram() {
 
   useEffect(() => {
     const fetchStats = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
       try {
         const data = await monetizationApi.getReferralStats();
         setStats(data);
       } catch (error) {
+        const err = error as Error & { status?: number };
         console.error('Failed to load referral stats:', error);
+        
+        // Don't crash on 401 - just show empty state
+        if (err.status === 401 || err.status === 403) {
+          // Token invalid - will be handled by apiRequest redirect
+          // Set empty stats to prevent UI crash
+          setStats({
+            referralCode: null,
+            referralLink: '',
+            totalReferrals: 0,
+            activeReferrals: 0,
+            rewards: [],
+          });
+        }
       } finally {
         setLoading(false);
       }
     };
 
-    if (user) {
-      void fetchStats();
-    }
+    void fetchStats();
   }, [user]);
 
   const handleGenerateCode = async () => {

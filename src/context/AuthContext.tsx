@@ -35,15 +35,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         
-        // Validate token with backend
-        const currentUser = await authApi.getCurrentUser();
-        if (currentUser && currentUser.id) {
-          setUser(currentUser);
-        } else {
-          setUser(null);
+        // Validate token with backend - use a flag to prevent redirect loops
+        try {
+          const currentUser = await authApi.getCurrentUser();
+          if (currentUser && currentUser.id) {
+            setUser(currentUser);
+          } else {
+            setUser(null);
+            // Clear invalid token
+            localStorage.removeItem('auth_token');
+          }
+        } catch (authError) {
+          // For /auth/me endpoint, 401 means invalid token - don't redirect here
+          // The redirect will happen when user tries to access protected routes
+          const err = authError as Error & { status?: number; code?: string };
+          if (err.status === 401 && err.code === 'UNAUTHORIZED') {
+            // Token is invalid - clear it but don't redirect (prevent loop)
+            localStorage.removeItem('auth_token');
+            setUser(null);
+          } else {
+            // Other errors - just clear user
+            setUser(null);
+          }
         }
       } catch (error) {
-        // Error already handled by apiRequest (redirects to login if 401)
         console.warn('Auth check failed:', error);
         setUser(null);
       } finally {

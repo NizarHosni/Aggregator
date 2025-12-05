@@ -58,7 +58,14 @@ export function AuthForm() {
         setError(error.message);
         setLoading(false);
       } else {
-        // Success - get return path from URL or default to home
+        // Success - clear any redirect flags to prevent loops
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem('auth_redirect_in_progress');
+        }
+        
+        // Wait a moment for token to be saved and validated
+        // Then get return path from URL or default to home
+        await new Promise(resolve => setTimeout(resolve, 100));
         const urlParams = new URLSearchParams(window.location.search);
         const returnPath = urlParams.get('return') || '/';
         navigate(returnPath, { replace: true });

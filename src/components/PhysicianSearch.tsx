@@ -465,14 +465,35 @@ export function PhysicianSearch() {
         setShowHistory(false);
       }
     } catch (error) {
-      const err = error as Error & { message?: string };
+      const err = error as Error & { message?: string; status?: number; code?: string };
       console.error('Search error:', err);
+      
+      // Handle 401 - authentication required
+      if (err.status === 401 || err.code === 'UNAUTHORIZED') {
+        // Token invalid - apiRequest will handle redirect
+        // Just show error message
+        if (page === 1) {
+          setSearchResults({
+            query: query,
+            specialty: 'Unknown',
+            location: null,
+            results: [],
+            resultsCount: 0,
+            error: 'Authentication required. Please log in to search.',
+          });
+        }
+        setSearching(false);
+        setLoadingMore(false);
+        return;
+      }
       
       let errorMessage = 'Search failed. Please try again.';
 
       const message = err.message || '';
       if (message.includes('quota') || message.includes('429')) {
         errorMessage = 'OpenAI API quota exceeded. The search will use fallback results, but they may be limited. Please check your OpenAI account billing.';
+      } else if (message.includes('Authentication required')) {
+        errorMessage = 'Authentication required. Please log in to search.';
       } else if (message) {
         errorMessage = message;
       }

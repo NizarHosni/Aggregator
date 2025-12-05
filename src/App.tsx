@@ -32,6 +32,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to={`/auth?return=${encodeURIComponent(returnPath)}`} replace />;
   }
 
+  // User is authenticated, show content
   return <>{children}</>;
 }
 

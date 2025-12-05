@@ -53,7 +53,8 @@ async function apiRequest<T>(
     ...(options.headers as Record<string, string> || {}),
   };
 
-  if (token) {
+  // Always include token if available - don't skip it
+  if (token && token !== 'undefined' && token !== 'null' && token.trim() !== '') {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
@@ -71,16 +72,31 @@ async function apiRequest<T>(
     headers,
   });
 
-  // Handle 401 Unauthorized - redirect to login
+  // Handle 401 Unauthorized - but don't redirect for auth endpoints to prevent loops
   if (response.status === 401) {
-    // Clear invalid token
-    removeToken();
+    // Don't redirect if we're checking auth status (would cause infinite loop)
+    const isAuthEndpoint = endpoint === '/auth/me' || endpoint === '/auth/is-admin';
     
-    // Only redirect if we're not already on the auth page
-    if (typeof window !== 'undefined' && !window.location.pathname.includes('/auth')) {
-      // Store the current path to return after login
-      const returnPath = window.location.pathname + window.location.search;
-      window.location.href = `/auth?return=${encodeURIComponent(returnPath)}`;
+    if (!isAuthEndpoint) {
+      // Clear invalid token
+      removeToken();
+      
+      // Only redirect if we're not already on the auth page and not checking auth
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/auth')) {
+        // Use a flag to prevent multiple redirects
+        const redirectKey = 'auth_redirect_in_progress';
+        if (!sessionStorage.getItem(redirectKey)) {
+          sessionStorage.setItem(redirectKey, 'true');
+          // Store the current path to return after login
+          const returnPath = window.location.pathname + window.location.search;
+          window.location.href = `/auth?return=${encodeURIComponent(returnPath)}`;
+          // Clear flag after redirect
+          setTimeout(() => sessionStorage.removeItem(redirectKey), 1000);
+        }
+      }
+    } else {
+      // For auth endpoints, just clear the token but don't redirect
+      removeToken();
     }
     
     const errorMessage = 'Authentication required. Please log in.';
@@ -164,7 +180,8 @@ export const authApi = {
         return null;
       }
       
-      // Validate token with backend
+      // Validate token with backend - but don't redirect on 401 for this endpoint
+      // We'll handle redirect in ProtectedRoute instead
       const user = await apiRequest<{ id: string; email: string }>('/auth/me');
       
       // If response is invalid, return null
@@ -175,9 +192,9 @@ export const authApi = {
       
       return user;
     } catch (error) {
-      const err = error as Error & { status?: number };
+      const err = error as Error & { status?: number; code?: string };
       
-      // 401/403 means invalid token - already handled by apiRequest (redirects to login)
+      // 401/403 means invalid token - clear it but don't redirect (prevent loop)
       if (err.status === 401 || err.status === 403) {
         removeToken();
         return null;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Settings, Shield, Crown, Gift, Lock, FileText, Bell } from 'lucide-react';
 import { PremiumFeatures } from './PremiumFeatures';
@@ -12,16 +12,18 @@ export function SettingsPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('premium');
 
-  // Redirect to home if no user (guest mode)
-  useEffect(() => {
-    if (!user) {
-      navigate('/');
-    }
-  }, [user, navigate]);
-
-  // Show loading or redirect message if no user
+  // ProtectedRoute handles redirect, but show loading if user not loaded yet
+  // Don't add redirect here to avoid conflicts with ProtectedRoute
   if (!user) {
-    return null; // Will redirect via useEffect
+    return (
+      <div className="min-h-screen bg-gradient-subtle flex items-center justify-center">
+        <div className="text-center glass-card rounded-3xl p-12 shadow-professional-lg">
+          <div className="spinner-professional mx-auto mb-6" />
+          <h2 className="text-heading text-xl mb-2">Loading...</h2>
+          <p className="text-body text-sm">Checking authentication...</p>
+        </div>
+      </div>
+    );
   }
 
   const tabs = [

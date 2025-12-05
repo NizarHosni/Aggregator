@@ -21,19 +21,35 @@ export function PremiumFeatures() {
 
   useEffect(() => {
     const fetchSubscription = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
       try {
         const data = await monetizationApi.getSubscription();
         setSubscription(data);
       } catch (error) {
+        const err = error as Error & { status?: number };
         console.error('Failed to load subscription:', error);
+        
+        // Don't crash on 401 - just show free tier
+        if (err.status === 401 || err.status === 403) {
+          // Token invalid - will be handled by apiRequest redirect
+          // Set default free subscription to prevent UI crash
+          setSubscription({
+            id: '',
+            userId: user.id,
+            tier: 'free',
+            features: ['Basic search', 'Limited results (15 per search)', 'Standard booking'],
+          });
+        }
       } finally {
         setLoading(false);
       }
     };
 
-    if (user) {
-      void fetchSubscription();
-    }
+    void fetchSubscription();
   }, [user]);
 
   const handleUpgrade = async (tier: 'premium' | 'enterprise') => {
