@@ -6,8 +6,8 @@
 [build.environment]
   SECRETS_SCAN_OMIT_KEYS = "PORT,CLIENT_URL"
   SECRETS_SCAN_OMIT_PATHS = "render.yaml,railway.json,server/**,dist/**"
-  VITE_API_URL = "https://physician-search-api-production.up.railway.app"
-  BACKEND_API_URL = "https://physician-search-api-production.up.railway.app"
+  # VITE_API_URL will be set in Netlify dashboard environment variables
+  # Use your Railway backend URL: https://your-app-name.up.railway.app/api
 
 [functions]
   directory = "netlify/functions"
