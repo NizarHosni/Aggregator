@@ -9,6 +9,18 @@ import {
   extractLocationFromQuery,
   matchSpecialty,
 } from '../utils/searchUtils.js';
+import {
+  normalizeSpecialty,
+  extractSpecialty,
+  correctLocationTypo,
+  suggestAlternativeSearches,
+  isFuzzyMatch,
+  normalizeState,
+} from '../utils/searchAccuracy.js';
+import { queryParser } from '../services/queryParser.js';
+import { taxonomyResolver } from '../services/taxonomyResolver.js';
+import { costMonitor } from '../services/costMonitor.js';
+import { canPerformSearch, incrementSearchCount } from '../services/usageTracker.js';
 
 export const searchRoutes = express.Router();
 
@@ -73,14 +85,22 @@ async function searchNPPES(
   lastName: string | null,
   specialty: string | null,
   city: string | null,
-  state: string | null
+  state: string | null,
+  taxonomyCode?: string | null
 ): Promise<NPPESProvider[]> {
   const baseUrl = 'https://npiregistry.cms.hhs.gov/api/?version=2.1';
   const params: string[] = [];
 
   if (firstName) params.push(`first_name=${encodeURIComponent(firstName)}`);
   if (lastName) params.push(`last_name=${encodeURIComponent(lastName)}`);
-  if (specialty) params.push(`taxonomy_description=${encodeURIComponent(specialty)}`);
+  
+  // Use taxonomy code if provided, otherwise fallback to description
+  if (taxonomyCode) {
+    params.push(`taxonomy_code=${encodeURIComponent(taxonomyCode)}`);
+  } else if (specialty) {
+    params.push(`taxonomy_description=${encodeURIComponent(specialty)}`);
+  }
+  
   if (city) params.push(`city=${encodeURIComponent(city)}`);
   if (state) params.push(`state=${encodeURIComponent(state)}`);
 
@@ -140,10 +160,69 @@ async function searchNPPES(
   }
 }
 
+// Get best specialty match from all NPPES taxonomies (not just primary)
+function getBestSpecialtyMatch(nppesDoctor: NPPESProvider, querySpecialty: string | null): string {
+  // If no query specialty, return primary
+  if (!querySpecialty) {
+    return nppesDoctor.taxonomies.find(tax => tax.primary)?.desc || 
+           nppesDoctor.taxonomies[0]?.desc || 'General Practice';
+  }
+  
+  const queryLower = querySpecialty.toLowerCase();
+  
+  // Check all taxonomies for direct matches
+  for (const tax of nppesDoctor.taxonomies) {
+    const taxDesc = tax.desc?.toLowerCase() || '';
+    if (taxDesc.includes(queryLower) || queryLower.includes(taxDesc)) {
+      return tax.desc || 'General Practice';
+    }
+  }
+  
+  // Check for subspecialty combinations
+  const hasInternalMedicine = nppesDoctor.taxonomies.some(t => 
+    t.desc?.toLowerCase().includes('internal medicine')
+  );
+  const hasCardiovascular = nppesDoctor.taxonomies.some(t => {
+    const desc = t.desc?.toLowerCase() || '';
+    return desc.includes('cardiovascular') || desc.includes('cardiac') || desc.includes('cardiology');
+  });
+  
+  if (hasInternalMedicine && hasCardiovascular && queryLower.includes('cardio')) {
+    return 'Cardiology'; // Override with better specialty
+  }
+  
+  // Return primary as fallback
+  return nppesDoctor.taxonomies.find(tax => tax.primary)?.desc || 
+         nppesDoctor.taxonomies[0]?.desc || 'General Practice';
+}
+
+// Extract specialty from Google Places place name
+function extractSpecialtyFromPlaceName(placeName: string): string | null {
+  const specialtyPatterns = [
+    { keywords: ['interventional cardiology', 'cardiology', 'cardiologist'], specialty: 'Cardiology' },
+    { keywords: ['retina', 'retinal', 'vitreoretinal'], specialty: 'Retina Specialist' },
+    { keywords: ['cardiac surgery', 'cardiothoracic', 'heart surgeon'], specialty: 'Cardiac Surgery' },
+    { keywords: ['ophthalmology', 'ophthalmologist'], specialty: 'Ophthalmology' },
+    { keywords: ['dermatology', 'dermatologist'], specialty: 'Dermatology' },
+    { keywords: ['orthopedic', 'orthopaedic'], specialty: 'Orthopedic Surgery' },
+    { keywords: ['neurology', 'neurologist'], specialty: 'Neurology' },
+    { keywords: ['oncology', 'oncologist'], specialty: 'Oncology' },
+  ];
+  
+  const nameLower = placeName.toLowerCase();
+  for (const pattern of specialtyPatterns) {
+    if (pattern.keywords.some(keyword => nameLower.includes(keyword))) {
+      return pattern.specialty;
+    }
+  }
+  return null;
+}
+
 // Enhance NPPES data with Google Places info
 async function enhanceWithGooglePlaces(
   nppesDoctor: NPPESProvider,
-  googleApiKey: string
+  googleApiKey: string,
+  querySpecialty: string | null = null
 ): Promise<{
   name: string;
   specialty: string;
@@ -152,6 +231,11 @@ async function enhanceWithGooglePlaces(
   rating: number;
   years_experience: number;
   npi?: string;
+  google_place_id?: string | null;
+  healthgrades_id?: string | null;
+  website?: string | null;
+  photo_url?: string | null;
+  photo_verified?: boolean;
 } | null> {
   try {
     const firstName = nppesDoctor.basic.first_name || '';
@@ -169,14 +253,16 @@ async function enhanceWithGooglePlaces(
     const addressLine = primaryAddress.address_1 || '';
     const fullAddress = `${addressLine}, ${city}, ${state} ${primaryAddress.postal_code || ''}`.trim();
 
-    // Get primary specialty
-    const primaryTaxonomy = nppesDoctor.taxonomies.find(tax => tax.primary) || nppesDoctor.taxonomies[0];
-    const specialty = primaryTaxonomy?.desc || 'General Practice';
+    // Get best specialty match from all taxonomies
+    let specialty = getBestSpecialtyMatch(nppesDoctor, querySpecialty);
 
     // Try to find doctor in Google Places
     let phone = primaryAddress.telephone_number || 'Not available';
     let rating = 0;
     let googleAddress = fullAddress;
+    let photoUrl: string | null = null;
+    let website: string | null = null;
+    let googlePlaceId: string | null = null;
 
     if (googleApiKey && city && state) {
       try {
@@ -234,9 +320,19 @@ async function enhanceWithGooglePlaces(
 
         if (placesData.results && placesData.results.length > 0) {
           const place = placesData.results[0];
+          
+          // Extract specialty from Google Places place name
+          let googleSpecialty: string | null = null;
+          if (place.name) {
+            googleSpecialty = extractSpecialtyFromPlaceName(place.name);
+            if (googleSpecialty) {
+              console.log('Extracted specialty from Google Places:', googleSpecialty);
+            }
+          }
+          
           if (place.place_id) {
-            // Get detailed info
-            const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=formatted_phone_number,rating&key=${googleApiKey}`;
+            // Get detailed info including photos
+            const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=formatted_phone_number,rating,photos,website&key=${googleApiKey}`;
             
             console.log('=== GOOGLE PLACES DETAILS DEBUG ===');
             console.log('Place ID:', place.place_id);
@@ -259,6 +355,12 @@ async function enhanceWithGooglePlaces(
               result?: {
                 formatted_phone_number?: string;
                 rating?: number;
+                photos?: Array<{
+                  photo_reference: string;
+                  height?: number;
+                  width?: number;
+                }>;
+                website?: string;
               };
               status?: string;
               error_message?: string;
@@ -268,6 +370,8 @@ async function enhanceWithGooglePlaces(
               status: detailsData.status,
               has_phone: !!detailsData.result?.formatted_phone_number,
               has_rating: !!detailsData.result?.rating,
+              has_photos: !!detailsData.result?.photos?.length,
+              has_website: !!detailsData.result?.website,
               error_message: detailsData.error_message,
             });
 
@@ -280,11 +384,36 @@ async function enhanceWithGooglePlaces(
                 rating = detailsData.result.rating;
                 console.log('Updated rating from Google Places:', rating);
               }
+              // Extract photo URL
+              if (detailsData.result.photos && detailsData.result.photos.length > 0) {
+                const photoReference = detailsData.result.photos[0].photo_reference;
+                photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${photoReference}&key=${googleApiKey}`;
+                console.log('Extracted photo URL from Google Places');
+              }
+              // Extract website
+              if (detailsData.result.website) {
+                website = detailsData.result.website;
+                console.log('Extracted website from Google Places:', website);
+              }
             }
 
             if (place.formatted_address) {
               googleAddress = place.formatted_address;
               console.log('Updated address from Google Places:', googleAddress);
+            }
+            // Store place ID for later use
+            googlePlaceId = place.place_id;
+          }
+          
+          // Use Google Places specialty when it matches query better than NPPES
+          if (googleSpecialty) {
+            const nppesSpecialty = getBestSpecialtyMatch(nppesDoctor, querySpecialty);
+            const googleMatch = matchSpecialty(googleSpecialty, googleSpecialty); // Self-match = 100
+            const nppesMatch = matchSpecialty(googleSpecialty, nppesSpecialty);
+            
+            if (googleMatch > nppesMatch || nppesSpecialty.toLowerCase().includes('internal medicine')) {
+              specialty = googleSpecialty; // Use Google Places specialty
+              console.log('Using Google Places specialty:', specialty, 'instead of NPPES:', nppesSpecialty);
             }
           }
         } else {
@@ -317,12 +446,17 @@ async function enhanceWithGooglePlaces(
 
     return {
       name: fullName,
-      specialty: specialty,
+      specialty: specialty, // This now uses Google Places specialty if better
       location: googleAddress || fullAddress,
       phone: phone,
       rating: rating,
       years_experience: yearsExperience,
       npi: nppesDoctor.number,
+      google_place_id: googlePlaceId,
+      healthgrades_id: null, // Not currently extracted from Google Places
+      website: website,
+      photo_url: photoUrl,
+      photo_verified: false, // Google Places photos are not "verified" by us
     };
   } catch (error) {
     console.error(`Error enhancing NPPES doctor ${nppesDoctor.number}:`, error);
@@ -718,24 +852,38 @@ function extractCityStateFromAddress(address: string | null): { city: string | n
   return { city: null, state: null };
 }
 
+// Strict function to check if doctor is actively licensed
+function isActiveLicensedDoctor(provider: NPPESProvider): boolean {
+  // Check enumeration status - must be 'A' (Active)
+  if (provider.basic?.status !== 'A') {
+    return false;
+  }
+  
+  // Check if deactivated (no recent updates in 5+ years is suspicious)
+  const lastUpdated = provider.basic?.last_updated;
+  if (lastUpdated) {
+    const yearsOld = (Date.now() - new Date(lastUpdated).getTime()) / (365 * 24 * 60 * 60 * 1000);
+    if (yearsOld > 5) {
+      return false; // No updates in 5+ years suggests inactive
+    }
+  }
+  
+  // Must have valid practice address (LOCATION purpose)
+  const practiceAddress = provider.addresses?.find(a => a.address_purpose === 'LOCATION');
+  if (!practiceAddress?.address_1) {
+    return false; // No practice address means not actively practicing
+  }
+  
+  // Must have basic name info
+  if (!provider.basic?.first_name || !provider.basic?.last_name) {
+    return false;
+  }
+  
+  return true;
+}
+
 function filterActiveNppesResults(doctors: NPPESProvider[]): NPPESProvider[] {
-  return doctors.filter((doctor) => {
-    const status = doctor.basic.status?.toLowerCase() || '';
-    
-    // ONLY filter truly deactivated/retired providers
-    // Much more lenient - phone and specific address types are optional in NPPES
-    const isDeactivated = 
-      status === 'deactivated' || 
-      status.includes('retired');
-    
-    // Keep doctor if they have at least ONE address (any type)
-    const hasAnyAddress = doctor.addresses && doctor.addresses.length > 0;
-    
-    // Keep doctor if they have basic name info
-    const hasName = doctor.basic.first_name && doctor.basic.last_name;
-    
-    return !isDeactivated && hasAnyAddress && hasName;
-  });
+  return doctors.filter(isActiveLicensedDoctor);
 }
 
 function filterPhysiciansByLocation(
@@ -876,9 +1024,11 @@ function parseLocation(locationStr: string | null): { city: string | null; state
   if (cityStateMatch) {
     const city = cityStateMatch[1].trim();
     const statePart = cityStateMatch[2].trim();
-    const state = statePart.length === 2 
-      ? statePart.toUpperCase() 
-      : STATE_MAP[statePart.toLowerCase()] || statePart;
+    // Normalize state using our utility function
+    const normalizedState = normalizeState(statePart);
+    const state = normalizedState.length === 2 
+      ? normalizedState.toUpperCase() 
+      : STATE_MAP[normalizedState.toLowerCase()] || normalizedState;
     return { city, state: state.toUpperCase() };
   }
 
@@ -886,8 +1036,9 @@ function parseLocation(locationStr: string | null): { city: string | null; state
   const words = trimmed.split(/\s+/);
   if (words.length >= 2) {
     // Check if last word is a state
-    const lastWord = words[words.length - 1].toLowerCase();
-    const state = STATE_MAP[lastWord] || (lastWord.length === 2 ? lastWord.toUpperCase() : null);
+    const lastWord = words[words.length - 1];
+    const normalizedState = normalizeState(lastWord);
+    const state = STATE_MAP[normalizedState.toLowerCase()] || (normalizedState.length === 2 ? normalizedState.toUpperCase() : null);
     
     if (state) {
       const city = words.slice(0, -1).join(' ');
@@ -1043,64 +1194,129 @@ searchRoutes.post('/physicians', async (req, res) => {
       return res.status(400).json({ error: 'Search query is required' });
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(500).json({ error: 'OpenAI API key not configured' });
+    // Check subscription limits (for logged-in users)
+    const userId = req.user?.id || null;
+    const searchCheck = await canPerformSearch(userId);
+    
+    if (!searchCheck.allowed) {
+      return res.status(403).json({
+        error: searchCheck.reason || 'Search limit reached',
+        usage: searchCheck.usage,
+        upgradeRequired: true,
+      });
     }
+
+    // OpenAI API key is optional - will use fallback parsing if not available
+    const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
 
     // === API DEBUG LOG ===
     console.log('=== SEARCH REQUEST DEBUG ===');
     console.log('Original Query:', query);
     console.log('Search Radius:', searchRadius, 'meters');
 
-    // Enhanced query parsing with fallback
-    let specialty: string | null = null;
-    let location: string | null = null;
-    let extractedName: { firstName: string | null; lastName: string | null } = { firstName: null, lastName: null };
-
-    // First, try improved regex-based parsing
-    const parsed = parseSearchQuery(query);
-    extractedName = {
-      firstName: parsed.firstName,
-      lastName: parsed.lastName,
-    };
-    specialty = parsed.specialty;
-    location = normalizeLocationString(parsed.location);
+    // === INTELLIGENT QUERY PARSING ===
+    console.log('=== INTELLIGENT QUERY PARSING ===');
+    const parseStartTime = Date.now();
     
-    // Apply enhanced location processing (fixes "Tukwilla" → "Tukwila")
+    let parsedQuery;
+    if (hasOpenAIKey) {
+      try {
+        parsedQuery = await queryParser.parse(query);
+        const parseTime = Date.now() - parseStartTime;
+        console.log(`Query parsing completed in ${parseTime}ms`);
+        console.log('Parsed Query:', JSON.stringify(parsedQuery, null, 2));
+        
+        // Record cost for query parsing (check cache stats)
+        const parserStats = queryParser.getStats();
+        const wasCached = parserStats.cacheHits > 0;
+        costMonitor.recordQueryParsing(true, wasCached);
+      } catch (error) {
+        console.error('Query parsing error, using fallback:', error);
+        // Fallback to basic parsing if GPT fails
+        parsedQuery = {
+          name: null,
+          specialty: extractSpecialty(query) || extractSpecialtyFromQuery(query) || null,
+          location: null,
+          search_type: 'specialty_search' as const,
+          confidence: 0.5,
+        };
+        costMonitor.recordQueryParsing(false, false);
+      }
+    } else {
+      console.log('OpenAI API key not configured, using fallback parsing');
+      // Fallback to regex-based parsing
+      const parsed = parseSearchQuery(query);
+      parsedQuery = {
+        name: parsed.firstName || parsed.lastName ? {
+          first: parsed.firstName,
+          last: parsed.lastName,
+          middle: null,
+        } : null,
+        specialty: parsed.specialty || extractSpecialty(query) || extractSpecialtyFromQuery(query) || null,
+        location: parsed.location ? {
+          city: null,
+          state: null,
+          full: parsed.location,
+        } : null,
+        search_type: 'combined' as const,
+        confidence: 0.6,
+      };
+      costMonitor.recordQueryParsing(false, false);
+    }
+
+    // Extract parsed data
+    let extractedName: { firstName: string | null; lastName: string | null } = {
+      firstName: parsedQuery.name?.first || null,
+      lastName: parsedQuery.name?.last || null,
+    };
+    
+    let specialty: string | null = parsedQuery.specialty;
+    let location: string | null = parsedQuery.location?.full || null;
+    let city: string | null = parsedQuery.location?.city || null;
+    let state: string | null = parsedQuery.location?.state || null;
+
+    // Resolve taxonomy codes for specialty
+    let taxonomyMapping = null;
+    if (specialty) {
+      console.log('=== TAXONOMY RESOLUTION ===');
+      const taxonomyStartTime = Date.now();
+      
+      try {
+        taxonomyMapping = await taxonomyResolver.resolve(specialty);
+        const taxonomyTime = Date.now() - taxonomyStartTime;
+        console.log(`Taxonomy resolution completed in ${taxonomyTime}ms`);
+        console.log('Taxonomy Mapping:', JSON.stringify(taxonomyMapping, null, 2));
+        
+        // Record cost for taxonomy resolution (check cache stats)
+        const resolverStats = taxonomyResolver.getStats();
+        const wasCached = resolverStats.cacheHits > 0;
+        costMonitor.recordTaxonomyResolution(taxonomyMapping?.usedGPT4 || false, wasCached);
+      } catch (error) {
+        console.error('Taxonomy resolution error:', error);
+        // Continue without taxonomy mapping - will use description search
+        costMonitor.recordTaxonomyResolution(false, false);
+      }
+    }
+
+    // Apply location corrections
     if (location) {
+      location = correctLocationTypo(location);
       location = enhancedLocationProcessing(location);
     }
-    
-    // Also try extracting from query directly as fallback
-    if (!extractedName.firstName && !extractedName.lastName) {
-      const extractedNameStr = extractNameFromQuery(query);
-      if (extractedNameStr) {
-        const nameParts = extractedNameStr.split(/\s+/);
-        if (nameParts.length >= 2) {
-          extractedName = {
-            firstName: nameParts[0],
-            lastName: nameParts.slice(1).join(' '),
-          };
-        }
-      }
-    }
-    
-    if (!specialty) {
-      // Use local extractSpecialtyFromQuery function
-      specialty = extractSpecialtyFromQuery(query);
-    }
-    
-    if (!location) {
-      location = extractLocationFromQuery(query);
-      if (location) {
-        location = enhancedLocationProcessing(location);
-      }
+    if (city) {
+      city = correctLocationTypo(city);
     }
 
     console.log('=== PARSED QUERY PARAMETERS ===');
     console.log('Parsed Name:', extractedName);
     console.log('Parsed Specialty:', specialty);
+    console.log('Taxonomy Codes:', taxonomyMapping ? {
+      primary: taxonomyMapping.primary,
+      secondary: taxonomyMapping.secondary,
+      confidence: taxonomyMapping.confidence,
+    } : 'None');
     console.log('Parsed Location:', location);
+    console.log('City:', city, 'State:', state);
 
     // GPT-FIRST STRATEGY DISABLED: Prevents AI hallucinations - use NPPES database only!
     // GPT should ONLY parse queries, NEVER suggest doctor names
@@ -1233,13 +1449,8 @@ Return ONLY valid JSON array, no other text.`;
       console.log('OpenAI API key not configured, skipping GPT-first search');
     }
 
-    // Parse location into city and state
-    const { city, state } = parseLocation(location);
-    
-    console.log('=== PARSED LOCATION ===');
-    console.log('Original Location String:', location);
-    console.log('Parsed City:', city);
-    console.log('Parsed State:', state);
+    // City and state are already extracted from parsedQuery above
+    // No need to parse again
 
     // Validate segmented search requirements
     const validation = validateSearchParams(
@@ -1381,24 +1592,165 @@ Return ONLY valid JSON array, no other text.`;
     if (nppesResults.length === 0) {
       console.log('=== NPPES DATABASE SEARCH (100% Real Doctors Only) ===');
       
-      // Expand specialty search to include related specialties
-      const expandedSpecialties = specialty ? expandSpecialtySearch(specialty) : [specialty].filter(Boolean) as string[];
-      console.log('=== SPECIALTY EXPANSION ===');
-      console.log('Original Specialty:', specialty);
-      console.log('Expanded Specialties:', expandedSpecialties);
-
-      // Attempt 1: Exact match with all parameters (try original specialty first)
-      let searchAttempt = 1;
-      const rawResults1 = await searchNPPES(
-        extractedName.firstName,
-        extractedName.lastName,
-        specialty,
-        city,
-        state
-      );
-      console.log(`Search attempt ${searchAttempt}: NPPES raw results: ${rawResults1.length}`);
-      nppesResults = filterActiveNppesResults(rawResults1);
-      console.log(`After active filter: ${nppesResults.length} results (filtered ${rawResults1.length - nppesResults.length})`);
+      // PRECISE SEARCH: Determine search strategy based on provided parameters
+      const hasName = extractedName.firstName || extractedName.lastName;
+      const hasSpecialty = !!specialty;
+      const hasLocation = !!(city || state);
+      
+      console.log('=== PRECISE SEARCH STRATEGY ===');
+      console.log('Has name:', hasName);
+      console.log('Has specialty:', hasSpecialty);
+      console.log('Has location:', hasLocation);
+      
+      // Strategy 1: Name only - search by name, return all matches (any specialty, any location)
+      if (hasName && !hasSpecialty && !hasLocation) {
+        console.log('Strategy: NAME ONLY - returning all doctors with matching name');
+        const rawResults1 = await searchNPPES(
+          extractedName.firstName,
+          extractedName.lastName,
+          null, // No specialty filter
+          null, // No location filter
+          null,
+          null // No taxonomy code
+        );
+        console.log(`NPPES raw results: ${rawResults1.length}`);
+        nppesResults = rawResults1.filter(provider => {
+          if (!provider.basic?.first_name || !provider.basic?.last_name) return false;
+          if (!provider.addresses || provider.addresses.length === 0) return false;
+          return true;
+        });
+        console.log(`After basic filter: ${nppesResults.length} results`);
+      }
+      // Strategy 2: Name + Location - require both to match
+      else if (hasName && hasLocation && !hasSpecialty) {
+        console.log('Strategy: NAME + LOCATION - requiring both to match');
+        const rawResults1 = await searchNPPES(
+          extractedName.firstName,
+          extractedName.lastName,
+          null, // No specialty filter
+          city,
+          state,
+          null // No taxonomy code
+        );
+        console.log(`NPPES raw results: ${rawResults1.length}`);
+        nppesResults = rawResults1.filter(provider => {
+          if (!provider.basic?.first_name || !provider.basic?.last_name) return false;
+          if (!provider.addresses || provider.addresses.length === 0) return false;
+          return true;
+        });
+        console.log(`After basic filter: ${nppesResults.length} results`);
+      }
+      // Strategy 3: Location + Specialty - require both to match
+      else if (hasLocation && hasSpecialty && !hasName) {
+        console.log('Strategy: LOCATION + SPECIALTY - requiring both to match');
+        const rawResults1 = await searchNPPES(
+          null, // No name filter
+          null,
+          specialty,
+          city,
+          state,
+          taxonomyMapping?.primary || null // Use taxonomy code if available
+        );
+        console.log(`NPPES raw results: ${rawResults1.length}`);
+        nppesResults = filterActiveNppesResults(rawResults1);
+        console.log(`After active filter: ${nppesResults.length} results`);
+      }
+      // Strategy 4: All three - require all to match
+      else if (hasName && hasSpecialty && hasLocation) {
+        console.log('Strategy: NAME + LOCATION + SPECIALTY - requiring all to match');
+        const rawResults1 = await searchNPPES(
+          extractedName.firstName,
+          extractedName.lastName,
+          specialty,
+          city,
+          state,
+          taxonomyMapping?.primary || null // Use taxonomy code if available
+        );
+        console.log(`NPPES raw results: ${rawResults1.length}`);
+        nppesResults = rawResults1.filter(provider => {
+          if (!provider.basic?.first_name || !provider.basic?.last_name) return false;
+          if (!provider.addresses || provider.addresses.length === 0) return false;
+          return true;
+        });
+        console.log(`After basic filter: ${nppesResults.length} results`);
+      }
+      // Strategy 5: Name + Specialty (no location) - require both to match
+      else if (hasName && hasSpecialty && !hasLocation) {
+        console.log('Strategy: NAME + SPECIALTY - requiring both to match');
+        const rawResults1 = await searchNPPES(
+          extractedName.firstName,
+          extractedName.lastName,
+          specialty,
+          null,
+          null,
+          taxonomyMapping?.primary || null // Use taxonomy code if available
+        );
+        console.log(`NPPES raw results: ${rawResults1.length}`);
+        nppesResults = rawResults1.filter(provider => {
+          if (!provider.basic?.first_name || !provider.basic?.last_name) return false;
+          if (!provider.addresses || provider.addresses.length === 0) return false;
+          return true;
+        });
+        console.log(`After basic filter: ${nppesResults.length} results`);
+      }
+      // Strategy 6: Specialty only (no name, no location) - return all with specialty
+      else if (hasSpecialty && !hasName && !hasLocation) {
+        console.log('Strategy: SPECIALTY ONLY - returning all doctors with matching specialty');
+        const rawResults1 = await searchNPPES(
+          null,
+          null,
+          specialty,
+          null,
+          null,
+          taxonomyMapping?.primary || null // Use taxonomy code if available
+        );
+        console.log(`NPPES raw results: ${rawResults1.length}`);
+        nppesResults = filterActiveNppesResults(rawResults1);
+        console.log(`After active filter: ${nppesResults.length} results`);
+      }
+      // Fallback: Try with all parameters
+      else {
+        console.log('Strategy: FALLBACK - trying with all provided parameters');
+        const rawResults1 = await searchNPPES(
+          extractedName.firstName,
+          extractedName.lastName,
+          specialty,
+          city,
+          state
+        );
+        console.log(`NPPES raw results: ${rawResults1.length}`);
+        nppesResults = rawResults1.filter(provider => {
+          if (!provider.basic?.first_name || !provider.basic?.last_name) return false;
+          if (!provider.addresses || provider.addresses.length === 0) return false;
+          return true;
+        });
+        console.log(`After basic filter: ${nppesResults.length} results`);
+      }
+      
+      // Expand specialty search if no results and we have specialty
+      const expandedSpecialties = specialty ? expandSpecialtySearch(specialty) : [];
+      if (nppesResults.length === 0 && expandedSpecialties.length > 1) {
+        console.log('=== TRYING EXPANDED SPECIALTIES ===');
+        for (const expandedSpecialty of expandedSpecialties.slice(1)) {
+          const expandedResults = await searchNPPES(
+            extractedName.firstName,
+            extractedName.lastName,
+            expandedSpecialty,
+            city,
+            state
+          );
+          if (expandedResults.length > 0) {
+            nppesResults = expandedResults.filter(provider => {
+              if (!provider.basic?.first_name || !provider.basic?.last_name) return false;
+              if (!provider.addresses || provider.addresses.length === 0) return false;
+              return true;
+            });
+            specialty = expandedSpecialty;
+            console.log(`Found ${nppesResults.length} results with expanded specialty: ${expandedSpecialty}`);
+            break;
+          }
+        }
+      }
       
       // If no results and we have expanded specialties, try them
       if (nppesResults.length === 0 && expandedSpecialties.length > 1) {
@@ -1412,8 +1764,19 @@ Return ONLY valid JSON array, no other text.`;
           );
           console.log(`Expanded specialty "${expandedSpecialty}": NPPES raw results: ${expandedResults.length}`);
           if (expandedResults.length > 0) {
-            nppesResults = filterActiveNppesResults(expandedResults);
-            console.log(`After active filter: ${nppesResults.length} results (filtered ${expandedResults.length - nppesResults.length})`);
+            // Use lenient filter for name queries
+            const hasName = extractedName.firstName || extractedName.lastName;
+            if (hasName) {
+              nppesResults = expandedResults.filter(provider => {
+                if (!provider.basic?.first_name || !provider.basic?.last_name) return false;
+                if (!provider.addresses || provider.addresses.length === 0) return false;
+                return true;
+              });
+              console.log(`After lenient name filter: ${nppesResults.length} results (filtered ${expandedResults.length - nppesResults.length})`);
+            } else {
+              nppesResults = filterActiveNppesResults(expandedResults);
+              console.log(`After active filter: ${nppesResults.length} results (filtered ${expandedResults.length - nppesResults.length})`);
+            }
             specialty = expandedSpecialty; // Update specialty for display
             console.log(`Found ${nppesResults.length} results with expanded specialty: ${expandedSpecialty}`);
             break;
@@ -1422,8 +1785,9 @@ Return ONLY valid JSON array, no other text.`;
       }
 
       // Attempt 2: Try last name only (handles "A. Kopstein", "Andrew M. Kopstein", etc.)
-      if (nppesResults.length === 0 && extractedName.lastName) {
-        searchAttempt = 2;
+      // Only if we didn't use a precise strategy above
+      if (nppesResults.length === 0 && extractedName.lastName && !hasName && !hasSpecialty && !hasLocation) {
+        let searchAttempt = 2;
         const rawResults2 = await searchNPPES(
           null, // Remove first name constraint
           extractedName.lastName,
@@ -1432,8 +1796,19 @@ Return ONLY valid JSON array, no other text.`;
           state
         );
         console.log(`Search attempt ${searchAttempt}: NPPES raw results: ${rawResults2.length} (last name only)`);
-        nppesResults = filterActiveNppesResults(rawResults2);
-        console.log(`After active filter: ${nppesResults.length} results (filtered ${rawResults2.length - nppesResults.length})`);
+        
+        // Use lenient filter for name queries
+        if (extractedName.firstName || extractedName.lastName) {
+          nppesResults = rawResults2.filter(provider => {
+            if (!provider.basic?.first_name || !provider.basic?.last_name) return false;
+            if (!provider.addresses || provider.addresses.length === 0) return false;
+            return true;
+          });
+          console.log(`After lenient name filter: ${nppesResults.length} results (filtered ${rawResults2.length - nppesResults.length})`);
+        } else {
+          nppesResults = filterActiveNppesResults(rawResults2);
+          console.log(`After active filter: ${nppesResults.length} results (filtered ${rawResults2.length - nppesResults.length})`);
+        }
         
         // If we got results, filter by advanced name matching
         if (nppesResults.length > 0 && extractedName.firstName) {
@@ -1448,8 +1823,9 @@ Return ONLY valid JSON array, no other text.`;
       }
 
       // Attempt 3: Remove location constraint if no results
-      if (nppesResults.length === 0 && (city || state)) {
-        searchAttempt = 3;
+      // Only if we didn't use a precise strategy above
+      if (nppesResults.length === 0 && (city || state) && !hasName && !hasSpecialty && !hasLocation) {
+        let searchAttempt = 3;
         const rawResults3 = await searchNPPES(
           extractedName.firstName,
           extractedName.lastName,
@@ -1458,8 +1834,19 @@ Return ONLY valid JSON array, no other text.`;
           null
         );
         console.log(`Search attempt ${searchAttempt}: NPPES raw results: ${rawResults3.length} (without location)`);
-        nppesResults = filterActiveNppesResults(rawResults3);
-        console.log(`After active filter: ${nppesResults.length} results (filtered ${rawResults3.length - nppesResults.length})`);
+        
+        // Use lenient filter for name queries
+        if (extractedName.firstName || extractedName.lastName) {
+          nppesResults = rawResults3.filter(provider => {
+            if (!provider.basic?.first_name || !provider.basic?.last_name) return false;
+            if (!provider.addresses || provider.addresses.length === 0) return false;
+            return true;
+          });
+          console.log(`After lenient name filter: ${nppesResults.length} results (filtered ${rawResults3.length - nppesResults.length})`);
+        } else {
+          nppesResults = filterActiveNppesResults(rawResults3);
+          console.log(`After active filter: ${nppesResults.length} results (filtered ${rawResults3.length - nppesResults.length})`);
+        }
         
         // Apply name matching if we have a name
         if (nppesResults.length > 0 && extractedName.firstName && extractedName.lastName) {
@@ -1473,8 +1860,9 @@ Return ONLY valid JSON array, no other text.`;
         }
       }
       // Attempt 3.5: Last name only, no location, no specialty
-      if (nppesResults.length === 0 && extractedName.lastName) {
-        searchAttempt = 3.5;
+      // Only if we didn't use a precise strategy above
+      if (nppesResults.length === 0 && extractedName.lastName && !hasName && !hasSpecialty && !hasLocation) {
+        let searchAttempt = 3.5;
         const rawResults35 = await searchNPPES(
           null,
           extractedName.lastName,
@@ -1483,8 +1871,19 @@ Return ONLY valid JSON array, no other text.`;
           state
         );
         console.log(`Search attempt ${searchAttempt}: NPPES raw results: ${rawResults35.length} (last name + location, no specialty)`);
-        nppesResults = filterActiveNppesResults(rawResults35);
-        console.log(`After active filter: ${nppesResults.length} results (filtered ${rawResults35.length - nppesResults.length})`);
+        
+        // Use lenient filter for name queries
+        if (extractedName.firstName || extractedName.lastName) {
+          nppesResults = rawResults35.filter(provider => {
+            if (!provider.basic?.first_name || !provider.basic?.last_name) return false;
+            if (!provider.addresses || provider.addresses.length === 0) return false;
+            return true;
+          });
+          console.log(`After lenient name filter: ${nppesResults.length} results (filtered ${rawResults35.length - nppesResults.length})`);
+        } else {
+          nppesResults = filterActiveNppesResults(rawResults35);
+          console.log(`After active filter: ${nppesResults.length} results (filtered ${rawResults35.length - nppesResults.length})`);
+        }
         
         // Filter by name and specialty matching
         if (nppesResults.length > 0 && extractedName.lastName) {
@@ -1522,8 +1921,9 @@ Return ONLY valid JSON array, no other text.`;
       }
 
       // Attempt 4: Try specialty-only search if we have specialty but no name
-      if (nppesResults.length === 0 && specialty && (!extractedName.firstName && !extractedName.lastName)) {
-        searchAttempt = 4;
+      // Only if we didn't use a precise strategy above
+      if (nppesResults.length === 0 && specialty && (!extractedName.firstName && !extractedName.lastName) && !hasName && !hasSpecialty && !hasLocation) {
+        let searchAttempt = 4;
         if (city || state) {
           const rawResults4 = await searchNPPES(
             null,
@@ -1539,8 +1939,9 @@ Return ONLY valid JSON array, no other text.`;
       }
 
       // Attempt 5: Try with alternative specialty terms, broader categories, or related specialties
-      if (nppesResults.length === 0) {
-        searchAttempt = 5;
+      // Only if we didn't use a precise strategy above
+      if (nppesResults.length === 0 && !hasName && !hasSpecialty && !hasLocation) {
+        let searchAttempt = 5;
         
         // Try broader specialty category first
         if (specialty) {
@@ -1556,8 +1957,20 @@ Return ONLY valid JSON array, no other text.`;
             if (rawResults5a.length > 0) {
               console.log(`Search attempt ${searchAttempt}: NPPES raw results: ${rawResults5a.length} (broader specialty: ${broaderSpecialty})`);
               specialty = broaderSpecialty; // Update specialty for result display
-              nppesResults = filterActiveNppesResults(rawResults5a);
-              console.log(`After active filter: ${nppesResults.length} results (filtered ${rawResults5a.length - nppesResults.length})`);
+              
+              // Use lenient filter for name queries
+              const hasName = extractedName.firstName || extractedName.lastName;
+              if (hasName) {
+                nppesResults = rawResults5a.filter(provider => {
+                  if (!provider.basic?.first_name || !provider.basic?.last_name) return false;
+                  if (!provider.addresses || provider.addresses.length === 0) return false;
+                  return true;
+                });
+                console.log(`After lenient name filter: ${nppesResults.length} results (filtered ${rawResults5a.length - nppesResults.length})`);
+              } else {
+                nppesResults = filterActiveNppesResults(rawResults5a);
+                console.log(`After active filter: ${nppesResults.length} results (filtered ${rawResults5a.length - nppesResults.length})`);
+              }
             }
           }
         }
@@ -1576,8 +1989,20 @@ Return ONLY valid JSON array, no other text.`;
           if (rawResults5b.length > 0) {
             console.log(`Search attempt ${searchAttempt}: NPPES raw results: ${rawResults5b.length} (related specialty: ${relatedSpecialty})`);
             specialty = relatedSpecialty; // Update specialty for result display
-            nppesResults = filterActiveNppesResults(rawResults5b);
-            console.log(`After active filter: ${nppesResults.length} results (filtered ${rawResults5b.length - nppesResults.length})`);
+            
+            // Use lenient filter for name queries
+            const hasName = extractedName.firstName || extractedName.lastName;
+            if (hasName) {
+              nppesResults = rawResults5b.filter(provider => {
+                if (!provider.basic?.first_name || !provider.basic?.last_name) return false;
+                if (!provider.addresses || provider.addresses.length === 0) return false;
+                return true;
+              });
+              console.log(`After lenient name filter: ${nppesResults.length} results (filtered ${rawResults5b.length - nppesResults.length})`);
+            } else {
+              nppesResults = filterActiveNppesResults(rawResults5b);
+              console.log(`After active filter: ${nppesResults.length} results (filtered ${rawResults5b.length - nppesResults.length})`);
+            }
             break;
           }
         }
@@ -1587,17 +2012,30 @@ Return ONLY valid JSON array, no other text.`;
         if (nppesResults.length === 0 && specialty && SPECIALTY_ALTERNATIVES[specialty]) {
         for (const altSpecialty of SPECIALTY_ALTERNATIVES[specialty]) {
           if (city || state) {
-            nppesResults = await searchNPPES(
+            const altResults = await searchNPPES(
               extractedName.firstName,
               extractedName.lastName,
               altSpecialty,
               city,
               state
             );
-            if (nppesResults.length > 0) {
-              console.log(`Search attempt ${searchAttempt}: NPPES returned ${nppesResults.length} results (using alternative specialty: ${altSpecialty})`);
+            if (altResults.length > 0) {
+              console.log(`Search attempt ${searchAttempt}: NPPES returned ${altResults.length} results (using alternative specialty: ${altSpecialty})`);
               specialty = altSpecialty; // Update specialty for result display
-              nppesResults = filterActiveNppesResults(nppesResults);
+              
+              // Use lenient filter for name queries
+              const hasName = extractedName.firstName || extractedName.lastName;
+              if (hasName) {
+                nppesResults = altResults.filter(provider => {
+                  if (!provider.basic?.first_name || !provider.basic?.last_name) return false;
+                  if (!provider.addresses || provider.addresses.length === 0) return false;
+                  return true;
+                });
+                console.log(`After lenient name filter: ${nppesResults.length} results (filtered ${altResults.length - nppesResults.length})`);
+              } else {
+                nppesResults = filterActiveNppesResults(altResults);
+                console.log(`After active filter: ${nppesResults.length} results (filtered ${altResults.length - nppesResults.length})`);
+              }
               break;
             }
           }
@@ -1605,7 +2043,8 @@ Return ONLY valid JSON array, no other text.`;
         }
         
         // If still no results and we have a specialty, try searching with just location and specialty
-        if (nppesResults.length === 0 && specialty && (city || state)) {
+        // BUT ONLY if no name was provided (name queries should prioritize name matches)
+        if (nppesResults.length === 0 && specialty && (city || state) && !extractedName.firstName && !extractedName.lastName) {
         const rawResults5c = await searchNPPES(
           null,
           null,
@@ -1634,7 +2073,8 @@ Return ONLY valid JSON array, no other text.`;
       }
       
       // FINAL ATTEMPT: Search without active filter if everything else failed
-      if (nppesResults.length === 0) {
+      // BUT ONLY if no name was provided (don't do broad specialty search when name is provided)
+      if (nppesResults.length === 0 && !extractedName.firstName && !extractedName.lastName) {
         console.log('=== FINAL ATTEMPT: Searching without active filter ===');
         console.log('Trying very broad search with minimal constraints...');
         
@@ -1669,6 +2109,40 @@ Return ONLY valid JSON array, no other text.`;
       }
     } // End of fallback NPPES search
 
+    // CRITICAL: Filter by name if a name was provided in the query
+    // This ensures name matches are prioritized over specialty-only results
+    if ((extractedName.firstName || extractedName.lastName) && nppesResults.length > 0) {
+      const searchFullName = extractedName.firstName && extractedName.lastName
+        ? `${extractedName.firstName} ${extractedName.lastName}`
+        : extractedName.lastName || extractedName.firstName || '';
+      
+      console.log('=== NAME-BASED FILTERING ===');
+      console.log('Search name:', searchFullName);
+      console.log('Results before name filter:', nppesResults.length);
+      
+      const nameFilteredResults = nppesResults.filter(doctor => {
+        const doctorFullName = `${doctor.basic.first_name || ''} ${doctor.basic.last_name || ''}`.trim();
+        const match = advancedNameMatching(searchFullName, doctorFullName);
+        
+        // Require at least 60% name match when a name is provided
+        if (match.match && match.score >= 60) {
+          return true;
+        }
+        return false;
+      });
+      
+      console.log('Results after name filter:', nameFilteredResults.length);
+      
+      // Only use name-filtered results if we found any matches
+      // If no name matches found, we'll still show specialty results but with lower confidence
+      if (nameFilteredResults.length > 0) {
+        nppesResults = nameFilteredResults;
+        console.log('Using name-filtered results only');
+      } else {
+        console.log('No name matches found - will show specialty results with low name scores');
+      }
+    }
+
     // Enhance with Google Places data
     let physicians: Array<{
       name: string;
@@ -1678,6 +2152,11 @@ Return ONLY valid JSON array, no other text.`;
       rating: number;
       years_experience: number;
       npi?: string;
+      google_place_id?: string | null;
+      healthgrades_id?: string | null;
+      website?: string | null;
+      photo_url?: string | null;
+      photo_verified?: boolean;
     }> = [];
 
     console.log('=== GOOGLE PLACES CONFIGURATION ===');
@@ -1690,7 +2169,7 @@ Return ONLY valid JSON array, no other text.`;
       const doctorsToEnhance = nppesResults.slice(0, 50);
       const enhancedDoctors = await Promise.all(
         doctorsToEnhance.map(doctor => 
-          enhanceWithGooglePlaces(doctor, process.env.GOOGLE_PLACES_API_KEY!)
+          enhanceWithGooglePlaces(doctor, process.env.GOOGLE_PLACES_API_KEY!, specialty)
         )
       );
       physicians = enhancedDoctors.filter((doc): doc is NonNullable<typeof doc> => doc !== null);
@@ -1701,8 +2180,7 @@ Return ONLY valid JSON array, no other text.`;
         const lastName = doctor.basic.last_name || '';
         const fullName = `${firstName} ${lastName}`.trim();
         const primaryAddress = doctor.addresses.find(addr => addr.address_purpose === 'LOCATION') || doctor.addresses[0];
-        const primaryTaxonomy = doctor.taxonomies.find(tax => tax.primary) || doctor.taxonomies[0];
-        const specialty = primaryTaxonomy?.desc || 'General Practice';
+        const doctorSpecialty = getBestSpecialtyMatch(doctor, specialty);
         const address = primaryAddress 
           ? `${primaryAddress.address_1 || ''}, ${primaryAddress.city || ''}, ${primaryAddress.state || ''} ${primaryAddress.postal_code || ''}`.trim()
           : 'Address not available';
@@ -1716,19 +2194,38 @@ Return ONLY valid JSON array, no other text.`;
 
         return {
           name: fullName,
-          specialty: specialty,
+          specialty: doctorSpecialty,
           location: address,
           phone: primaryAddress?.telephone_number || 'Not available',
           rating: 0,
           years_experience: yearsExperience,
           npi: doctor.number,
+          google_place_id: null,
+          healthgrades_id: null,
+          website: null,
+          photo_url: null,
+          photo_verified: false,
         };
       });
     }
 
-    // Enforce strict location filtering if a location was provided
+    // PRECISE LOCATION FILTERING: Equal priority for all provided parameters
+    // If location is provided, require location match (regardless of name/specialty)
     if (physicians.length > 0 && (city || state || location)) {
+      const hasName = extractedName.firstName || extractedName.lastName;
+      const hasSpecialty = !!specialty;
+      
+      console.log('=== PRECISE LOCATION FILTERING ===');
+      console.log('Has name:', hasName);
+      console.log('Has specialty:', hasSpecialty);
+      console.log('Has location:', !!(city || state || location));
+      console.log('Results before location filter:', physicians.length);
+      
+      // When location is provided, require location match (equal priority)
+      // This applies whether name/specialty are also provided or not
       physicians = filterPhysiciansByLocation(physicians, city, state, location);
+      
+      console.log('Results after location filter:', physicians.length);
     }
     
     // Apply confidence-based ranking with advanced name matching
@@ -1750,12 +2247,59 @@ Return ONLY valid JSON array, no other text.`;
         ...doctor,
         city: doctorCity,
         state: doctorState,
-        sourceCount: 1, // Will be enhanced if Google Places data is available
+        sourceCount: (doctor.google_place_id ? 2 : 1), // 2 if Google Places data is present
       };
     });
     
-    // Rank by confidence score
-    const rankedPhysicians = rankSearchResults(physiciansWithMetadata, queryForRanking, 60); // Lower threshold for more results
+    // PRE-RANKING NAME FILTER: If name is provided, filter out non-matching names
+    let physiciansToRank = physiciansWithMetadata;
+    if (queryForRanking.name) {
+      console.log('=== PRE-RANKING NAME FILTER ===');
+      console.log('Filtering by name:', queryForRanking.name);
+      console.log('Results before name filter:', physiciansToRank.length);
+      
+      physiciansToRank = physiciansWithMetadata.filter(doctor => {
+        const nameMatch = advancedNameMatching(queryForRanking.name!, doctor.name);
+        // Only keep results with at least 60% name match
+        const keep = nameMatch.match && nameMatch.score >= 60;
+        if (!keep) {
+          console.log(`Filtered out: ${doctor.name} (match score: ${nameMatch.score})`);
+        }
+        return keep;
+      });
+      
+      console.log('Results after name filter:', physiciansToRank.length);
+      
+      // If no name matches found, show a message but still return specialty results
+      if (physiciansToRank.length === 0 && physiciansWithMetadata.length > 0) {
+        console.log('⚠️  No exact name matches found - showing specialty results with low confidence');
+        // Keep specialty results but they'll have low name scores
+        physiciansToRank = physiciansWithMetadata;
+      }
+    }
+    
+    // Calculate dynamic confidence threshold
+    let confidenceThreshold = 60; // Default
+    
+    // If name is provided, use higher threshold to filter out weak matches
+    if (queryForRanking.name) {
+      confidenceThreshold = 50; // Higher threshold for name queries
+      console.log('Using higher confidence threshold (50) for name query:', queryForRanking.name);
+    } else {
+      // If no name in query, lower threshold (specialty+location queries are less strict)
+      confidenceThreshold = 40; // Much lower for specialty+location
+      console.log('Lowered confidence threshold to 40 (no name in query)');
+    }
+    
+    // If we have Google Places data, lower threshold even more (but only if no name)
+    const hasGooglePlaces = physiciansWithMetadata.some(d => d.sourceCount && d.sourceCount > 1);
+    if (hasGooglePlaces && !queryForRanking.name) {
+      confidenceThreshold = 30; // Very low when Google Places confirms
+      console.log('Lowered confidence threshold to 30 (Google Places confirmed)');
+    }
+    
+    // Rank by confidence score (using filtered results)
+    const rankedPhysicians = rankSearchResults(physiciansToRank, queryForRanking, confidenceThreshold);
     
     // Convert back to original format
     physicians = rankedPhysicians.map(({ confidence, city: _city, state: _state, sourceCount: _sourceCount, ...doctor }) => doctor);
@@ -1864,6 +2408,11 @@ Return ONLY valid JSON array, no other text.`;
       console.log('No results found - check API logs above for issues');
     }
 
+    // Track search usage (for logged-in users)
+    if (userId) {
+      await incrementSearchCount(userId, query, resultsCount);
+    }
+
     // Search history removed - now handled client-side with localStorage
 
     res.json({
@@ -1873,6 +2422,7 @@ Return ONLY valid JSON array, no other text.`;
       results: paginatedResults,
       resultsCount,
       searchRadius: (city || state) ? searchRadius : null,
+      usage: searchCheck?.usage, // Include usage info in response
       pagination: {
         currentPage,
         resultsPerPage,
@@ -1900,5 +2450,25 @@ Return ONLY valid JSON array, no other text.`;
         details: error.message || 'Unknown error occurred'
       });
     }
+  }
+});
+
+// Stats endpoint for monitoring
+searchRoutes.get('/stats', (req, res) => {
+  try {
+    const queryParserStats = queryParser.getStats();
+    const taxonomyResolverStats = taxonomyResolver.getStats();
+    const costStats = costMonitor.getStats();
+    const costBreakdown = costMonitor.getCostBreakdown();
+
+    res.json({
+      queryParser: queryParserStats,
+      taxonomyResolver: taxonomyResolverStats,
+      cost: costStats,
+      costBreakdown,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });

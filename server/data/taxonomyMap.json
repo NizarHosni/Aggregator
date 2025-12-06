@@ -1,0 +1,387 @@
+{
+  "cardiologist": {
+    "primary": "207R00000X",
+    "secondary": "207RC0000X",
+    "confidence": 0.95,
+    "description": "Internal Medicine - Cardiovascular Disease"
+  },
+  "cardiology": {
+    "primary": "207R00000X",
+    "secondary": "207RC0000X",
+    "confidence": 0.95,
+    "description": "Internal Medicine - Cardiovascular Disease"
+  },
+  "heart doctor": {
+    "primary": "207R00000X",
+    "secondary": "207RC0000X",
+    "confidence": 0.90,
+    "description": "Internal Medicine - Cardiovascular Disease"
+  },
+  "retina surgeon": {
+    "primary": "207W00000X",
+    "secondary": "207WX0200X",
+    "confidence": 0.95,
+    "description": "Ophthalmology - Retina Specialist"
+  },
+  "retina specialist": {
+    "primary": "207W00000X",
+    "secondary": "207WX0200X",
+    "confidence": 0.95,
+    "description": "Ophthalmology - Retina Specialist"
+  },
+  "retinal specialist": {
+    "primary": "207W00000X",
+    "secondary": "207WX0200X",
+    "confidence": 0.95,
+    "description": "Ophthalmology - Retina Specialist"
+  },
+  "vitreoretinal surgeon": {
+    "primary": "207W00000X",
+    "secondary": "207WX0200X",
+    "confidence": 0.95,
+    "description": "Ophthalmology - Retina Specialist"
+  },
+  "ophthalmologist": {
+    "primary": "207W00000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Ophthalmology"
+  },
+  "eye doctor": {
+    "primary": "207W00000X",
+    "secondary": null,
+    "confidence": 0.90,
+    "description": "Ophthalmology"
+  },
+  "dermatologist": {
+    "primary": "207N00000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Dermatology"
+  },
+  "dermatology": {
+    "primary": "207N00000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Dermatology"
+  },
+  "skin doctor": {
+    "primary": "207N00000X",
+    "secondary": null,
+    "confidence": 0.90,
+    "description": "Dermatology"
+  },
+  "orthopedic surgeon": {
+    "primary": "207X00000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Orthopedic Surgery"
+  },
+  "orthopedist": {
+    "primary": "207X00000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Orthopedic Surgery"
+  },
+  "orthopedic": {
+    "primary": "207X00000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Orthopedic Surgery"
+  },
+  "neurologist": {
+    "primary": "2084N0400X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Psychiatry & Neurology - Neurology"
+  },
+  "neurology": {
+    "primary": "2084N0400X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Psychiatry & Neurology - Neurology"
+  },
+  "oncologist": {
+    "primary": "207X00000X",
+    "secondary": "207X00000X",
+    "confidence": 0.90,
+    "description": "Medical Oncology"
+  },
+  "oncology": {
+    "primary": "207X00000X",
+    "secondary": "207X00000X",
+    "confidence": 0.90,
+    "description": "Medical Oncology"
+  },
+  "cancer doctor": {
+    "primary": "207X00000X",
+    "secondary": "207X00000X",
+    "confidence": 0.85,
+    "description": "Medical Oncology"
+  },
+  "pediatrician": {
+    "primary": "208000000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Pediatrics"
+  },
+  "pediatrics": {
+    "primary": "208000000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Pediatrics"
+  },
+  "psychiatrist": {
+    "primary": "2084P0800X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Psychiatry & Neurology - Psychiatry"
+  },
+  "psychiatry": {
+    "primary": "2084P0800X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Psychiatry & Neurology - Psychiatry"
+  },
+  "internal medicine": {
+    "primary": "207R00000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Internal Medicine"
+  },
+  "internist": {
+    "primary": "207R00000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Internal Medicine"
+  },
+  "primary care": {
+    "primary": "207R00000X",
+    "secondary": null,
+    "confidence": 0.90,
+    "description": "Internal Medicine"
+  },
+  "family medicine": {
+    "primary": "208D00000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Family Medicine"
+  },
+  "family doctor": {
+    "primary": "208D00000X",
+    "secondary": null,
+    "confidence": 0.90,
+    "description": "Family Medicine"
+  },
+  "urologist": {
+    "primary": "208800000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Urology"
+  },
+  "urology": {
+    "primary": "208800000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Urology"
+  },
+  "gastroenterologist": {
+    "primary": "207R00000X",
+    "secondary": "207RG0100X",
+    "confidence": 0.95,
+    "description": "Internal Medicine - Gastroenterology"
+  },
+  "gastroenterology": {
+    "primary": "207R00000X",
+    "secondary": "207RG0100X",
+    "confidence": 0.95,
+    "description": "Internal Medicine - Gastroenterology"
+  },
+  "gi doctor": {
+    "primary": "207R00000X",
+    "secondary": "207RG0100X",
+    "confidence": 0.90,
+    "description": "Internal Medicine - Gastroenterology"
+  },
+  "endocrinologist": {
+    "primary": "207R00000X",
+    "secondary": "207RE0101X",
+    "confidence": 0.95,
+    "description": "Internal Medicine - Endocrinology, Diabetes & Metabolism"
+  },
+  "endocrinology": {
+    "primary": "207R00000X",
+    "secondary": "207RE0101X",
+    "confidence": 0.95,
+    "description": "Internal Medicine - Endocrinology, Diabetes & Metabolism"
+  },
+  "diabetes doctor": {
+    "primary": "207R00000X",
+    "secondary": "207RE0101X",
+    "confidence": 0.90,
+    "description": "Internal Medicine - Endocrinology, Diabetes & Metabolism"
+  },
+  "pulmonologist": {
+    "primary": "207R00000X",
+    "secondary": "207RP1001X",
+    "confidence": 0.95,
+    "description": "Internal Medicine - Pulmonary Disease"
+  },
+  "pulmonology": {
+    "primary": "207R00000X",
+    "secondary": "207RP1001X",
+    "confidence": 0.95,
+    "description": "Internal Medicine - Pulmonary Disease"
+  },
+  "lung doctor": {
+    "primary": "207R00000X",
+    "secondary": "207RP1001X",
+    "confidence": 0.90,
+    "description": "Internal Medicine - Pulmonary Disease"
+  },
+  "nephrologist": {
+    "primary": "207R00000X",
+    "secondary": "207RN0300X",
+    "confidence": 0.95,
+    "description": "Internal Medicine - Nephrology"
+  },
+  "nephrology": {
+    "primary": "207R00000X",
+    "secondary": "207RN0300X",
+    "confidence": 0.95,
+    "description": "Internal Medicine - Nephrology"
+  },
+  "kidney doctor": {
+    "primary": "207R00000X",
+    "secondary": "207RN0300X",
+    "confidence": 0.90,
+    "description": "Internal Medicine - Nephrology"
+  },
+  "rheumatologist": {
+    "primary": "207R00000X",
+    "secondary": "207RR0500X",
+    "confidence": 0.95,
+    "description": "Internal Medicine - Rheumatology"
+  },
+  "rheumatology": {
+    "primary": "207R00000X",
+    "secondary": "207RR0500X",
+    "confidence": 0.95,
+    "description": "Internal Medicine - Rheumatology"
+  },
+  "obgyn": {
+    "primary": "207V00000X",
+    "secondary": null,
+    "confidence": 0.95,
+    "description": "Obstetrics & Gynecology"
+  },
+  "ob-gyn": {
+    "primary": "207V00000X",
+    "secondary": null,
+    "confidence": 0.95,
+    "description": "Obstetrics & Gynecology"
+  },
+  "obstetrics": {
+    "primary": "207V00000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Obstetrics & Gynecology"
+  },
+  "gynecology": {
+    "primary": "207V00000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Obstetrics & Gynecology"
+  },
+  "ent": {
+    "primary": "207Y00000X",
+    "secondary": null,
+    "confidence": 0.95,
+    "description": "Otolaryngology"
+  },
+  "otolaryngologist": {
+    "primary": "207Y00000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Otolaryngology"
+  },
+  "ear nose throat": {
+    "primary": "207Y00000X",
+    "secondary": null,
+    "confidence": 0.90,
+    "description": "Otolaryngology"
+  },
+  "anesthesiologist": {
+    "primary": "207L00000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Anesthesiology"
+  },
+  "anesthesiology": {
+    "primary": "207L00000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Anesthesiology"
+  },
+  "radiologist": {
+    "primary": "2085R0001X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Radiology"
+  },
+  "radiology": {
+    "primary": "2085R0001X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Radiology"
+  },
+  "plastic surgeon": {
+    "primary": "2086S0102X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Surgery - Plastic and Reconstructive Surgery"
+  },
+  "plastic surgery": {
+    "primary": "2086S0102X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Surgery - Plastic and Reconstructive Surgery"
+  },
+  "general surgeon": {
+    "primary": "208600000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Surgery"
+  },
+  "general surgery": {
+    "primary": "208600000X",
+    "secondary": null,
+    "confidence": 1.0,
+    "description": "Surgery"
+  },
+  "surgeon": {
+    "primary": "208600000X",
+    "secondary": null,
+    "confidence": 0.85,
+    "description": "Surgery"
+  },
+  "cataract surgeon": {
+    "primary": "207W00000X",
+    "secondary": "207WX0108X",
+    "confidence": 0.95,
+    "description": "Ophthalmology - Cataract and Refractive Surgery"
+  },
+  "glaucoma specialist": {
+    "primary": "207W00000X",
+    "secondary": "207WX0109X",
+    "confidence": 0.95,
+    "description": "Ophthalmology - Glaucoma Specialist"
+  },
+  "cornea specialist": {
+    "primary": "207W00000X",
+    "secondary": "207WX0107X",
+    "confidence": 0.95,
+    "description": "Ophthalmology - Cornea and External Disease Specialist"
+  }
+}
+

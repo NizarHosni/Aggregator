@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useUser } from '@stackframe/stack';
+import { useAuth } from '../context/AuthContext';
 import { historyApi, type SearchHistoryItem } from '../lib/api';
 
 interface StoredSearchResults {
@@ -20,7 +20,7 @@ const MAX_HISTORY_ITEMS = 50;
 export function useSearchHistory() {
   const [history, setHistory] = useState<SearchHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const user = useUser();
+  const { user } = useAuth();
 
   // Load history from database (if logged in) or localStorage (if guest)
   const loadHistory = async () => {
@@ -202,6 +202,18 @@ export function useSearchHistory() {
   useEffect(() => {
     loadHistory();
   }, [user]); // Reload when user changes
+
+  // Ensure history is saved to localStorage even if database save fails
+  useEffect(() => {
+    if (history.length > 0 && !user) {
+      // For guest users, ensure localStorage is always updated
+      try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      } catch (error) {
+        console.error('Error saving history to localStorage:', error);
+      }
+    }
+  }, [history, user]);
 
   return {
     history,

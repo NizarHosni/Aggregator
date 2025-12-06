@@ -1,7 +1,6 @@
-import { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Search, Stethoscope, Copy, Check, AlertCircle, Phone, MapPin, Star, Clock, ChevronDown, Loader2, ExternalLink, Heart } from 'lucide-react';
-import { UserButton } from '@stackframe/stack';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Search, Stethoscope, Copy, Check, AlertCircle, Phone, MapPin, Star, Clock, ChevronDown, Loader2, ExternalLink, Heart, LogIn, LogOut, User, Crown } from 'lucide-react';
 import { useSearchHistory } from '../hooks/useSearchHistory';
 import { useFavorites } from '../hooks/useFavorites';
 import { usePreferences } from '../hooks/usePreferences';
@@ -12,11 +11,21 @@ import { useSEO } from '../hooks/useSEO';
 import { AppointmentBookingCard } from './AppointmentBooking';
 import { ReviewScorecard } from './ReviewScorecard';
 import { normalizeDoctorData, getDoctorSources, extractPracticeInfo } from '../utils/doctorUtils';
+import { useAuth } from '../context/AuthContext';
+import { GoogleMap, Marker, InfoWindow } from '@react-google-maps/api';
 
 interface SearchResult {
   query: string;
   specialty: string;
   location: string | { formatted_address: string; name?: string; location?: { lat: number; lng: number } } | null;
+  upgradeRequired?: boolean;
+  usage?: {
+    searches: number;
+    limit: number;
+    remaining: number;
+    resetDate: string;
+    isPremium: boolean;
+  };
   results: Array<{
     name: string;
     specialty: string;
@@ -29,6 +38,7 @@ interface SearchResult {
     telehealth?: boolean;
     inPerson?: boolean;
     afterHours?: boolean;
+    google_place_id?: string | null;
   }>;
   resultsCount: number;
   error?: string | null;
@@ -67,6 +77,8 @@ interface DoctorCardProps {
   index: number;
   isFavorited?: boolean;
   onToggleFavorite?: () => void;
+  isSelected?: boolean;
+  onSelect?: () => void;
 }
 
 interface DeepSearchData {
@@ -154,7 +166,7 @@ function DeepSearchPanel({ data }: { data: DeepSearchData }) {
   );
 }
 
-function DoctorCard({ doctor, index, isFavorited = false, onToggleFavorite }: DoctorCardProps) {
+function DoctorCard({ doctor, index, isFavorited = false, onToggleFavorite, isSelected = false, onSelect }: DoctorCardProps) {
   const navigate = useNavigate();
   const [showDeepInfo, setShowDeepInfo] = useState(false);
   const [deepSearchData, setDeepSearchData] = useState<DeepSearchData | null>(null);
@@ -204,8 +216,12 @@ function DoctorCard({ doctor, index, isFavorited = false, onToggleFavorite }: Do
 
   return (
     <div 
-      className="doctor-card animate-fade-in relative"
+      className={`doctor-card animate-fade-in relative cursor-pointer transition-all ${
+        isSelected ? 'ring-2 ring-blue-500 shadow-lg scale-105' : 'hover:shadow-md'
+      }`}
       style={{ animationDelay: `${index * 0.05}s` }}
+      onClick={onSelect}
+      data-doctor-npi={doctor.npi}
     >
       {/* Favorite Button */}
       {doctor.npi && onToggleFavorite && (
@@ -368,7 +384,150 @@ function SearchGuidance() {
   );
 }
 
-function MapIntegration({ doctors }: { doctors: SearchResult['results'] }) {
+const mapContainerStyle = {
+  width: '100%',
+  height: '400px',
+  borderRadius: '1rem',
+};
+
+const defaultCenter = {
+  lat: 39.8283,
+  lng: -98.5795,
+};
+
+interface MapIntegrationProps {
+  doctors: SearchResult['results'];
+  selectedDoctorNpi?: string | null;
+  onDoctorSelect?: (npi: string | null) => void;
+}
+
+function MapIntegration({ doctors, selectedDoctorNpi, onDoctorSelect }: MapIntegrationProps) {
+  const [selectedMarkerIndex, setSelectedMarkerIndex] = useState<number | null>(null);
+  const [mapCenter, setMapCenter] = useState(defaultCenter);
+  const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
+  const geocoderRef = useRef<google.maps.Geocoder | null>(null);
+  
+  // Helper function to get maps app URL
+  const getMapsUrl = (address: string, googlePlaceId?: string | null) => {
+    // Detect iOS
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    
+    if (googlePlaceId) {
+      // Use Google Place ID for best accuracy
+      if (isIOS) {
+        // iOS Maps with place ID (fallback to address if not supported)
+        return `http://maps.apple.com/?q=${encodeURIComponent(address)}`;
+      } else {
+        // Google Maps with place ID
+        return `https://www.google.com/maps/place/?q=place_id:${googlePlaceId}`;
+      }
+    } else {
+      // Fallback to address-based URL
+      if (isIOS) {
+        return `http://maps.apple.com/?q=${encodeURIComponent(address)}`;
+      } else {
+        return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+      }
+    }
+  };
+
+  // Geocode doctor addresses to get coordinates
+  const [doctorMarkers, setDoctorMarkers] = useState<Array<{
+    position: { lat: number; lng: number };
+    doctor: SearchResult['results'][0];
+    index: number;
+  }>>([]);
+
+  // Check if Google Maps is loaded
+  useEffect(() => {
+    const checkGoogleMaps = () => {
+      if (typeof window !== 'undefined' && window.google && window.google.maps) {
+        setIsGoogleMapsLoaded(true);
+        geocoderRef.current = new window.google.maps.Geocoder();
+      } else {
+        setTimeout(checkGoogleMaps, 100);
+      }
+    };
+    checkGoogleMaps();
+  }, []);
+
+  // Geocode addresses when Google Maps is loaded
+  useEffect(() => {
+    if (!isGoogleMapsLoaded || !geocoderRef.current || doctors.length === 0) return;
+
+    const geocodePromises = doctors.map((doctor, index) => {
+      return new Promise<{ position: { lat: number; lng: number }; doctor: typeof doctor; index: number } | null>((resolve) => {
+        if (!geocoderRef.current) {
+          resolve(null);
+          return;
+        }
+
+        geocoderRef.current.geocode(
+          { address: doctor.location },
+          (results, status) => {
+            if (status === 'OK' && results && results[0]) {
+              const location = results[0].geometry.location;
+              resolve({
+                position: { lat: location.lat(), lng: location.lng() },
+                doctor,
+                index,
+              });
+            } else {
+              resolve(null);
+            }
+          }
+        );
+      });
+    });
+
+    Promise.all(geocodePromises).then((markers) => {
+      const validMarkers = markers.filter((m): m is NonNullable<typeof m> => m !== null);
+      setDoctorMarkers(validMarkers);
+      
+      // Center map on selected doctor, or first doctor, or average of all doctors
+      if (validMarkers.length > 0) {
+        if (selectedDoctorNpi) {
+          // Find selected doctor marker
+          const selectedMarker = validMarkers.find(m => m.doctor.npi === selectedDoctorNpi);
+          if (selectedMarker) {
+            setMapCenter(selectedMarker.position);
+            setSelectedMarkerIndex(selectedMarker.index);
+          } else if (validMarkers.length === 1) {
+            setMapCenter(validMarkers[0].position);
+          } else {
+            const avgLat = validMarkers.reduce((sum, m) => sum + m.position.lat, 0) / validMarkers.length;
+            const avgLng = validMarkers.reduce((sum, m) => sum + m.position.lng, 0) / validMarkers.length;
+            setMapCenter({ lat: avgLat, lng: avgLng });
+          }
+        } else if (validMarkers.length === 1) {
+          setMapCenter(validMarkers[0].position);
+        } else {
+          // Calculate center point
+          const avgLat = validMarkers.reduce((sum, m) => sum + m.position.lat, 0) / validMarkers.length;
+          const avgLng = validMarkers.reduce((sum, m) => sum + m.position.lng, 0) / validMarkers.length;
+          setMapCenter({ lat: avgLat, lng: avgLng });
+        }
+      }
+    });
+  }, [doctors, isGoogleMapsLoaded, selectedDoctorNpi]);
+  
+  // Update selected marker when selectedDoctorNpi changes
+  useEffect(() => {
+    if (selectedDoctorNpi && doctorMarkers.length > 0) {
+      const selectedMarker = doctorMarkers.find(m => m.doctor.npi === selectedDoctorNpi);
+      if (selectedMarker) {
+        setSelectedMarkerIndex(selectedMarker.index);
+        setMapCenter(selectedMarker.position);
+      }
+    } else {
+      setSelectedMarkerIndex(null);
+    }
+  }, [selectedDoctorNpi, doctorMarkers]);
+
+  const onMapLoad = useCallback(() => {
+    // Map loaded successfully
+  }, []);
+
   if (!doctors.length) return null;
 
   return (
@@ -376,16 +535,114 @@ function MapIntegration({ doctors }: { doctors: SearchResult['results'] }) {
       <div className="flex items-center justify-between mb-3">
         <div>
           <h3 className="text-heading text-lg">Doctors in your area</h3>
-          <p className="text-body text-sm">Interactive map experience coming soon</p>
+          <p className="text-body text-sm">Click markers to see doctor details</p>
         </div>
-        <span className="text-sm font-semibold text-blue-600">{doctors.length} markers</span>
+        <span className="text-sm font-semibold text-blue-600">{doctors.length} {doctors.length === 1 ? 'doctor' : 'doctors'}</span>
       </div>
-      <div className="map-placeholder rounded-2xl border border-dashed border-blue-200 bg-blue-50/40 p-6 text-center text-body text-sm">
-        📍 Preview coordinates will appear here once the interactive map is live.
+      
+      <div className="rounded-2xl overflow-hidden border border-gray-200" style={{ minHeight: '400px' }}>
+        {isGoogleMapsLoaded && typeof window !== 'undefined' && window.google && window.google.maps ? (
+          <GoogleMap
+            mapContainerStyle={mapContainerStyle}
+            center={mapCenter}
+            zoom={doctorMarkers.length === 1 ? 14 : doctorMarkers.length > 1 ? 12 : 10}
+            onLoad={onMapLoad}
+            options={{
+              disableDefaultUI: false,
+              zoomControl: true,
+              streetViewControl: false,
+              mapTypeControl: true,
+              fullscreenControl: true,
+              styles: [
+                {
+                  featureType: 'poi',
+                  elementType: 'labels',
+                  stylers: [{ visibility: 'off' }],
+                },
+              ],
+            }}
+          >
+            {doctorMarkers.map((marker) => {
+              const isSelected = selectedMarkerIndex === marker.index || marker.doctor.npi === selectedDoctorNpi;
+              return (
+                <Marker
+                  key={marker.index}
+                  position={marker.position}
+                  onClick={() => {
+                    setSelectedMarkerIndex(marker.index);
+                    if (onDoctorSelect && marker.doctor.npi) {
+                      onDoctorSelect(marker.doctor.npi);
+                    }
+                  }}
+                  icon={{
+                    url: 'data:image/svg+xml;base64,' + btoa(`
+                      <svg width="${isSelected ? '40' : '32'}" height="${isSelected ? '40' : '32'}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="16" cy="16" r="14" fill="${isSelected ? '#dc2626' : '#2563eb'}" stroke="white" stroke-width="2"/>
+                        <path d="M16 8 L20 16 L16 20 L12 16 Z" fill="white"/>
+                      </svg>
+                    `),
+                    scaledSize: new window.google.maps.Size(isSelected ? 40 : 32, isSelected ? 40 : 32),
+                  }}
+                >
+                  {isSelected && (
+                    <InfoWindow
+                      onCloseClick={() => {
+                        setSelectedMarkerIndex(null);
+                        if (onDoctorSelect) {
+                          onDoctorSelect(null);
+                        }
+                      }}
+                      position={marker.position}
+                    >
+                      <div className="p-2" style={{ maxWidth: '250px' }}>
+                        <h4 className="font-semibold text-sm mb-1">{marker.doctor.name}</h4>
+                        <p className="text-xs text-gray-600 mb-1">{marker.doctor.specialty}</p>
+                        <p className="text-xs text-gray-500 mb-2">{marker.doctor.location}</p>
+                        <div className="flex flex-col gap-2 text-xs">
+                          <div className="flex items-center gap-2">
+                            {marker.doctor.phone && (
+                              <a
+                                href={`tel:${marker.doctor.phone}`}
+                                className="text-blue-600 hover:underline flex items-center gap-1"
+                              >
+                                <Phone className="w-3 h-3" />
+                                {marker.doctor.phone}
+                              </a>
+                            )}
+                            {marker.doctor.rating > 0 && (
+                              <div className="flex items-center gap-1 text-yellow-600">
+                                <Star className="w-3 h-3 fill-current" />
+                                <span>{marker.doctor.rating.toFixed(1)}</span>
+                              </div>
+                            )}
+                          </div>
+                          <a
+                            href={getMapsUrl(marker.doctor.location, (marker.doctor as any).google_place_id)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 mt-1 border-t border-gray-200 pt-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MapPin className="w-3 h-3" />
+                            Open in Maps
+                          </a>
+                        </div>
+                      </div>
+                    </InfoWindow>
+                  )}
+                </Marker>
+              );
+            })}
+          </GoogleMap>
+        ) : (
+          <div className="map-placeholder rounded-2xl border border-dashed border-blue-200 bg-blue-50/40 p-6 text-center text-body text-sm flex items-center justify-center" style={{ minHeight: '400px' }}>
+            <div>
+              <p className="mb-2">📍 Loading map...</p>
+              <p className="text-xs text-gray-500">If the map doesn't load, check your internet connection</p>
+            </div>
+          </div>
+        )}
       </div>
-      <button className="view-map-btn btn-secondary w-full mt-4">
-        📍 View on Interactive Map (Beta)
-      </button>
     </div>
   );
 }
@@ -393,7 +650,7 @@ function MapIntegration({ doctors }: { doctors: SearchResult['results'] }) {
 const DEFAULT_RADIUS_METERS = 25000;
 
 export function PhysicianSearch() {
-  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const { addToHistory, saveSearchResults, getSearchResults, refreshHistory } = useSearchHistory();
   const { isFavorited, toggleFavorite } = useFavorites();
   const { preferences } = usePreferences();
@@ -409,6 +666,7 @@ export function PhysicianSearch() {
   const [copied, setCopied] = useState(false);
   const [currentSearchQuery, setCurrentSearchQuery] = useState('');
   const [currentSearchLocation, setCurrentSearchLocation] = useState('');
+  const [selectedDoctorNpi, setSelectedDoctorNpi] = useState<string | null>(null);
   const resultsEndRef = useRef<HTMLDivElement>(null);
 
   // SEO optimization
@@ -485,13 +743,34 @@ export function PhysicianSearch() {
         setShowHistory(false);
       }
     } catch (error) {
-      const err = error as Error & { message?: string; status?: number; code?: string };
+      const err = error as Error & { message?: string; status?: number; code?: string; upgradeRequired?: boolean; usage?: any };
       console.error('Search error:', err);
       
       let errorMessage = 'Search failed. Please try again.';
 
       const message = err.message || '';
-      if (message.includes('quota') || message.includes('429')) {
+      if (err.status === 403 || err.upgradeRequired) {
+        // Subscription limit reached
+        errorMessage = message || 'You\'ve reached your monthly search limit. Upgrade to Premium for unlimited searches.';
+        setSearchResults({
+          query: query.trim(),
+          specialty: '',
+          location: null,
+          results: [],
+          resultsCount: 0,
+          error: errorMessage,
+          suggestions: [
+            'Upgrade to Premium for unlimited searches',
+            'Your search limit resets monthly',
+            err.usage ? `${err.usage.searches} of ${err.usage.limit} searches used this month` : null,
+          ].filter(Boolean) as string[],
+          usage: err.usage,
+          upgradeRequired: true,
+        });
+        setSearching(false);
+        setLoadingMore(false);
+        return;
+      } else if (message.includes('quota') || message.includes('429')) {
         errorMessage = 'OpenAI API quota exceeded. The search will use fallback results, but they may be limited. Please check your OpenAI account billing.';
       } else if (message) {
         errorMessage = message;
@@ -635,13 +914,14 @@ export function PhysicianSearch() {
       {/* Professional Header */}
       <div className="sticky top-0 z-50 glass-card-strong border-b border-gray-200/50 shadow-professional">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-medical flex items-center justify-center shadow-lg">
+          <div className="flex items-center justify-between gap-4">
+            {/* Left side - Logo and Title */}
+            <div className="flex items-center gap-4 flex-shrink-0 min-w-0">
+              <div className="w-12 h-12 rounded-xl bg-gradient-medical flex items-center justify-center shadow-lg flex-shrink-0">
                 <Stethoscope className="w-6 h-6 text-white" />
               </div>
-              <div>
-                <h1 className="text-heading text-xl sm:text-2xl">
+              <div className="min-w-0">
+                <h1 className="text-heading text-xl sm:text-2xl truncate">
                   Find Real Doctors
                 </h1>
                 <p className="text-body text-xs sm:text-sm hidden sm:block">
@@ -650,16 +930,42 @@ export function PhysicianSearch() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => navigate('/favorites')}
-                className="btn-secondary text-sm py-2 px-4 flex items-center gap-2"
-              >
-                <Heart className="w-4 h-4" />
-                <span className="hidden sm:inline">Favorites</span>
-              </button>
+            {/* Right side - Buttons */}
+            <div className="flex items-center gap-3">
+              {user ? (
+                <>
+                  <Link to="/favorites" className="btn-secondary text-sm py-2 px-4 flex items-center gap-2">
+                    <Heart className="w-4 h-4" />
+                    <span className="hidden sm:inline">Favorites</span>
+                  </Link>
+                  <div className="relative group">
+                    <button className="btn-secondary text-sm py-2 px-4 flex items-center gap-2">
+                      <User className="w-4 h-4" />
+                      <span className="hidden sm:inline">{user.name || user.email.split('@')[0]}</span>
+                    </button>
+                    <div className="absolute right-0 mt-2 w-48 glass-card rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                      <Link to="/profile" className="block px-4 py-2 text-sm text-heading hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-xl">
+                        Profile
+                      </Link>
+                      <button onClick={() => logout()} className="w-full text-left px-4 py-2 text-sm text-heading hover:bg-gray-50 dark:hover:bg-gray-700 rounded-b-xl flex items-center gap-2">
+                        <LogOut className="w-4 h-4" />
+                        Sign Out
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Link to="/login" className="btn-secondary text-sm py-2 px-4 flex items-center gap-2">
+                    <LogIn className="w-4 h-4" />
+                    <span>Sign In</span>
+                  </Link>
+                  <Link to="/signup" className="btn-primary text-sm py-2 px-4">
+                    Sign Up
+                  </Link>
+                </>
+              )}
               <PreferencesMenu />
-              <UserButton />
             </div>
           </div>
         </div>
@@ -784,20 +1090,43 @@ export function PhysicianSearch() {
             )}
 
             {searchResults.error ? (
-              <div className="glass-card rounded-2xl p-6 border border-amber-200 bg-amber-50/50">
+              <div className={`glass-card rounded-2xl p-6 border ${searchResults.upgradeRequired ? 'border-blue-300 bg-blue-50/50' : 'border-amber-200 bg-amber-50/50'}`}>
                 <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-body font-medium text-amber-900">{searchResults.error}</p>
+                  {searchResults.upgradeRequired ? (
+                    <Crown className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                  )}
+                  <div className="flex-1">
+                    <p className={`text-body font-medium ${searchResults.upgradeRequired ? 'text-blue-900' : 'text-amber-900'}`}>
+                      {searchResults.error}
+                    </p>
                     {searchResults.suggestions && searchResults.suggestions.length > 0 && (
-                      <ul className="mt-3 space-y-2 text-sm text-amber-800">
+                      <ul className="mt-3 space-y-2 text-sm">
                         {searchResults.suggestions.map((suggestion, index) => (
-                          <li key={index} className="flex items-start gap-2">
-                            <span className="text-amber-500 mt-0.5">•</span>
+                          <li key={index} className={`flex items-start gap-2 ${searchResults.upgradeRequired ? 'text-blue-800' : 'text-amber-800'}`}>
+                            <span className={`mt-0.5 ${searchResults.upgradeRequired ? 'text-blue-500' : 'text-amber-500'}`}>•</span>
                             <span>{suggestion}</span>
                           </li>
                         ))}
                       </ul>
+                    )}
+                    {searchResults.upgradeRequired && user && (
+                      <Link
+                        to="/subscription"
+                        className="mt-4 inline-block btn-primary"
+                      >
+                        <Crown className="w-4 h-4 inline mr-2" />
+                        Upgrade to Premium
+                      </Link>
+                    )}
+                    {searchResults.upgradeRequired && !user && (
+                      <Link
+                        to="/login"
+                        className="mt-4 inline-block btn-primary"
+                      >
+                        Sign In to Upgrade
+                      </Link>
                     )}
                   </div>
                 </div>
@@ -819,6 +1148,12 @@ export function PhysicianSearch() {
                       doctor={doctor} 
                       index={index}
                       isFavorited={doctor.npi ? isFavorited(doctor.npi) : false}
+                      isSelected={doctor.npi === selectedDoctorNpi}
+                      onSelect={() => {
+                        if (doctor.npi) {
+                          setSelectedDoctorNpi(doctor.npi === selectedDoctorNpi ? null : doctor.npi);
+                        }
+                      }}
                       onToggleFavorite={doctor.npi ? async () => {
                         await toggleFavorite({
                           npi: doctor.npi!,
@@ -863,7 +1198,20 @@ export function PhysicianSearch() {
                   </div>
                 )}
 
-                <MapIntegration doctors={allResults} />
+                <MapIntegration 
+                  doctors={allResults} 
+                  selectedDoctorNpi={selectedDoctorNpi}
+                  onDoctorSelect={(npi) => {
+                    setSelectedDoctorNpi(npi);
+                    // Scroll to selected doctor card
+                    if (npi) {
+                      const cardElement = document.querySelector(`[data-doctor-npi="${npi}"]`);
+                      if (cardElement) {
+                        cardElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }
+                    }
+                  }}
+                />
 
                 {searchResults.suggestions && searchResults.suggestions.length > 0 && (
                   <div className="mt-6 glass-card rounded-2xl p-5 border border-blue-200">

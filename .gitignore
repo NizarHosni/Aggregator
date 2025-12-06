@@ -27,3 +27,18 @@ dist-ssr
 .env
 .env.local
 .env.production
+.env.*
+ENV_SETUP.txt
+*.env.example
+
+# User-uploaded files
+uploads/
+uploads/**/*
+
+# Development build output
+dev-dist/
+dev-dist/**/*
+
+# Build artifacts
+*.tsbuildinfo
+.cache/

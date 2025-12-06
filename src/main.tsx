@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { StackAuthProvider } from './context/StackAuthProvider';
 import { checkBrowserCompatibility, showBrowserIncompatibility } from './utils/browserCheck';
 
 // PREVENT EXTERNAL SCRIPTS FROM BREAKING THE APP
@@ -80,9 +79,7 @@ try {
   root.render(
     <StrictMode>
       <ErrorBoundary>
-        <StackAuthProvider>
-          <App />
-        </StackAuthProvider>
+        <App />
       </ErrorBoundary>
     </StrictMode>
   );

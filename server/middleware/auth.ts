@@ -1,47 +1,80 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import { verifyToken } from '../utils/auth.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-
-export interface AuthRequest extends Request {
-  userId?: string;
-  userEmail?: string;
+// Extend Express Request to include user info
+declare global {
+  namespace Express {
+    interface Request {
+      userId?: string;
+      user?: {
+        id: string;
+        email: string;
+      };
+    }
+  }
 }
 
-export function authenticateToken(req: AuthRequest, res: Response, next: NextFunction) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-
-  if (!token) {
-    return res.status(401).json({ error: 'Access token required' });
-  }
-
+// Middleware to require authentication
+export async function requireAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; email: string };
+    // Get token from HTTP-only cookie
+    const token = req.cookies?.auth_token;
+
+    if (!token) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    // Verify token
+    const decoded = verifyToken(token);
+    
+    if (!decoded) {
+      res.status(401).json({ error: 'Invalid or expired token' });
+      return;
+    }
+
+    // Attach user info to request
     req.userId = decoded.userId;
-    req.userEmail = decoded.email;
+    req.user = {
+      id: decoded.userId,
+      email: decoded.email,
+    };
+
     next();
-  } catch {
-    return res.status(403).json({ error: 'Invalid or expired token' });
+  } catch (error) {
+    console.error('Auth middleware error:', error);
+    res.status(500).json({ error: 'Authentication error' });
   }
 }
 
-export function generateToken(userId: string, email: string): string {
-  return jwt.sign({ userId, email }, JWT_SECRET, { expiresIn: '7d' });
-}
+// Middleware for optional authentication
+export async function optionalAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const token = req.cookies?.auth_token;
 
-// Admin check middleware - checks if user email is in admin list
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+    if (token) {
+      const decoded = verifyToken(token);
+      if (decoded) {
+        req.userId = decoded.userId;
+        req.user = {
+          id: decoded.userId,
+          email: decoded.email,
+        };
+      }
+    }
 
-export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction) {
-  if (!req.userEmail) {
-    return res.status(401).json({ error: 'Authentication required' });
+    next();
+  } catch (error) {
+    // Silently fail for optional auth
+    next();
   }
-
-  if (!ADMIN_EMAILS.includes(req.userEmail.toLowerCase())) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-
-  next();
 }
 

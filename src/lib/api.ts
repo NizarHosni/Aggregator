@@ -27,27 +27,11 @@ type ApiErrorPayload = {
   code?: string;
 };
 
-// Get auth token from Stack Auth (if available)
-async function getAuthToken(): Promise<string | null> {
-  try {
-    // Stack Auth stores tokens in cookies automatically
-    // For API requests, we'll use the cookie-based auth
-    // If we need to send token in header, we can get it from Stack client
-    const { stackClientApp } = await import('./stack');
-    const user = await stackClientApp.getUser();
-    if (user) {
-      // Stack Auth handles token automatically via cookies
-      // But we can also get it explicitly if needed
-      return null; // Cookie-based auth, no need for header token
-    }
-    return null;
-  } catch (error) {
-    return null;
-  }
-}
+// Auth token is handled via HTTP-only cookies automatically
+// No need to manually manage tokens
 
 // Simplified API request helper with optional authentication
-async function apiRequest<T>(
+export async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
@@ -95,11 +79,15 @@ async function apiRequest<T>(
     const enrichedError = new Error(errorMessage) as Error & {
       status?: number;
       code?: string;
+      upgradeRequired?: boolean;
+      usage?: any;
     };
     enrichedError.status = response.status;
     if (responseData.code) {
       enrichedError.code = responseData.code;
     }
+    enrichedError.upgradeRequired = responseData.upgradeRequired || false;
+    enrichedError.usage = responseData.usage;
     throw enrichedError;
   }
 
@@ -380,17 +368,93 @@ export const favoritesApi = {
 // Auth API
 export const authApi = {
   async getCurrentUser() {
-    try {
-      return await apiRequest<{
+    return apiRequest<{
+      user: {
         id: string;
         email: string;
-        displayName?: string;
-      }>('/auth/me', {
-        method: 'GET',
-      });
-    } catch (error) {
-      return null;
-    }
+        name?: string;
+        emailVerified: boolean;
+      };
+    }>('/auth/me', {
+      method: 'GET',
+    });
+  },
+  async signup(email: string, password: string, name?: string) {
+    return apiRequest<{
+      message: string;
+      user: {
+        id: string;
+        email: string;
+        name?: string;
+        emailVerified: boolean;
+      };
+    }>('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, name }),
+    });
+  },
+  async login(email: string, password: string) {
+    return apiRequest<{
+      message: string;
+      user: {
+        id: string;
+        email: string;
+        name?: string;
+        emailVerified: boolean;
+      };
+    }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  },
+  async logout() {
+    return apiRequest<{ message: string }>('/auth/logout', {
+      method: 'POST',
+    });
+  },
+  async verifyEmail(email: string, code: string) {
+    return apiRequest<{
+      message: string;
+      user: {
+        id: string;
+        email: string;
+        name?: string;
+        emailVerified: boolean;
+      };
+    }>('/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ email, code }),
+    });
+  },
+  async resendVerification(email: string) {
+    return apiRequest<{ message: string }>('/auth/resend-verification', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+  async forgotPassword(email: string) {
+    return apiRequest<{ message: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+  async resetPassword(token: string, password: string) {
+    return apiRequest<{ message: string }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
+    });
+  },
+  async changePassword(currentPassword: string, newPassword: string) {
+    return apiRequest<{ message: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
+  async deleteAccount(password: string) {
+    return apiRequest<{ message: string }>('/auth/account', {
+      method: 'DELETE',
+      body: JSON.stringify({ password }),
+    });
   },
 };
 

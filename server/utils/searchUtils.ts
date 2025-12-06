@@ -229,6 +229,24 @@ export function matchSpecialty(searchSpecialty: string | null, doctorSpecialty: 
   // Exact match
   if (searchNorm === doctorNorm) return 100;
 
+  // NEW: Subspecialty mappings (Internal Medicine + Cardiovascular = Cardiology)
+  const subspecialtyMappings: Record<string, string[]> = {
+    'cardiology': ['internal medicine', 'cardiovascular disease', 'cardiac', 'interventional cardiology', 'cardiovascular'],
+    'retina surgery': ['ophthalmology', 'retinal', 'vitreoretinal', 'retina'],
+    'cardiac surgery': ['thoracic surgery', 'cardiothoracic', 'heart surgery', 'cardiovascular surgery'],
+    'interventional cardiology': ['cardiology', 'internal medicine', 'cardiovascular'],
+  };
+
+  // Check if search specialty matches doctor's subspecialty
+  for (const [mainSpecialty, relatedSpecialties] of Object.entries(subspecialtyMappings)) {
+    if (searchNorm.includes(mainSpecialty) || mainSpecialty.includes(searchNorm)) {
+      // If doctor has any related subspecialty, give high score
+      if (relatedSpecialties.some(sub => doctorNorm.includes(sub))) {
+        return 90; // High match for subspecialty
+      }
+    }
+  }
+
   // Contains match
   if (doctorNorm.includes(searchNorm) || searchNorm.includes(doctorNorm)) return 90;
 
@@ -325,27 +343,50 @@ export function calculateConfidenceScore(
   let locationScore = 0;
   let sourceBonus = 0;
 
-  // NAME MATCHING (40% of score)
+  // PRECISE PRIORITY: Equal weight for all provided parameters (33.3% each)
+  // Count how many parameters are provided
+  const providedParams = [query.name, query.specialty, query.location].filter(Boolean).length;
+  const paramWeight = providedParams > 0 ? 1 / providedParams : 0;
+
+  // NAME MATCHING - Equal weight when provided
   if (query.name) {
     const nameMatch = advancedNameMatching(query.name, doctor.name);
-    nameScore = nameMatch.score * 0.4;
+    nameScore = nameMatch.score * paramWeight;
+    
+    // If name doesn't match at all, set score to 0
+    if (!nameMatch.match || nameMatch.score < 60) {
+      nameScore = 0;
+    }
   } else {
-    nameScore = 20; // Neutral score if no name in query
+    nameScore = providedParams === 0 ? 33.3 : 0; // Neutral only if no params provided
   }
 
-  // SPECIALTY MATCHING (30% of score)
+  // SPECIALTY MATCHING - Equal weight when provided
   if (query.specialty) {
-    specialtyScore = matchSpecialty(query.specialty, doctor.specialty) * 0.3;
+    specialtyScore = matchSpecialty(query.specialty, doctor.specialty) * paramWeight;
   } else {
-    specialtyScore = 15; // Neutral score if no specialty in query
+    specialtyScore = providedParams === 0 ? 33.3 : 0; // Neutral only if no params provided
   }
 
-  // LOCATION MATCHING (30% of score)
-  locationScore = matchLocation(query.location || null, doctor.city || null, doctor.state || null) * 0.3;
+  // LOCATION MATCHING - Equal weight when provided
+  if (query.location) {
+    locationScore = matchLocation(query.location, doctor.city || null, doctor.state || null) * paramWeight;
+  } else {
+    locationScore = providedParams === 0 ? 33.3 : 0; // Neutral only if no params provided
+  }
 
   // BONUS: MULTIPLE SOURCE VERIFICATION
   if (doctor.sourceCount && doctor.sourceCount > 1) {
     sourceBonus += 10;
+  }
+  
+  // NEW: Google Places specialty confirmation bonus
+  if (doctor.sourceCount && doctor.sourceCount > 1 && query.specialty) {
+    // If we have Google Places data AND specialty matches, big bonus
+    const specialtyMatch = matchSpecialty(query.specialty, doctor.specialty);
+    if (specialtyMatch >= 85) {
+      sourceBonus += 20; // Big bonus for Google Places + specialty match
+    }
   }
   
   // BONUS: OFFICIAL NPI

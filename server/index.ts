@@ -11,6 +11,9 @@ import { reviewsRoutes } from './routes/reviews.js';
 import { authRoutes } from './routes/auth.js';
 import { historyRoutes } from './routes/history.js';
 import { favoritesRoutes } from './routes/favorites.js';
+import { doctorsRoutes } from './routes/doctors.js';
+import { subscriptionRoutes } from './routes/subscriptions.js';
+import { webhookRoutes } from './routes/webhooks.js';
 import { securityHeaders, rateLimit } from './middleware/security.js';
 import { initDatabase } from './db/index.js';
 
@@ -75,10 +78,11 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-stack-auth'],
 }));
 app.use(express.json());
 app.use(cookieParser());
+app.use('/uploads', express.static(join(__dirname, '../uploads')));
 
 // Security middleware
 app.use(securityHeaders);
@@ -152,6 +156,9 @@ app.use('/api/reviews', reviewsRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/favorites', favoritesRoutes);
+app.use('/api/doctors', doctorsRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/webhooks', webhookRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

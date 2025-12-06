@@ -1,11 +1,17 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
 import { PhysicianSearch } from './components/PhysicianSearch';
 import { DoctorProfile } from './components/DoctorProfile';
 import { FavoritesPage } from './components/FavoritesPage';
-import { AuthPage } from './components/AuthPage';
+import { LoginPage } from './pages/LoginPage';
+import { SignupPage } from './pages/SignupPage';
+import { VerifyEmailPage } from './pages/VerifyEmailPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { UserProfilePage } from './components/UserProfilePage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
+import { Subscription } from './components/Subscription';
 
 function NotFound() {
   return (
@@ -24,36 +30,50 @@ function NotFound() {
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/auth" element={<AuthPage />} />
-        <Route
-          path="/"
-          element={
-            <>
-              <PhysicianSearch />
-              <PWAInstallPrompt />
-            </>
-          }
-        />
-        <Route
-          path="/favorites"
-          element={
-            <ProtectedRoute>
-              <FavoritesPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="/doctor/:npi" element={<DoctorProfile />} />
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <UserProfilePage />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route
+            path="/"
+            element={
+              <>
+                <PhysicianSearch />
+                <PWAInstallPrompt />
+              </>
+            }
+          />
+          <Route
+            path="/favorites"
+            element={
+              <ProtectedRoute>
+                <FavoritesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/doctor/:npi" element={<DoctorProfile />} />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <UserProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/subscription"
+            element={
+              <ProtectedRoute>
+                <Subscription />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

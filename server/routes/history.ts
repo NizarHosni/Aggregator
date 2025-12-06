@@ -1,11 +1,11 @@
 import express from 'express';
-import { verifyStackAuth } from '../middleware/stackAuth.js';
+import { requireAuth } from '../middleware/auth.js';
 import { sql } from '../db/index.js';
 
 export const historyRoutes = express.Router();
 
 // Get user's search history
-historyRoutes.get('/', verifyStackAuth, async (req, res) => {
+historyRoutes.get('/', requireAuth, async (req, res) => {
   try {
     const userId = req.userId!;
     const limit = parseInt(req.query.limit as string) || 50;
@@ -32,7 +32,7 @@ historyRoutes.get('/', verifyStackAuth, async (req, res) => {
 });
 
 // Add search to history
-historyRoutes.post('/', verifyStackAuth, async (req, res) => {
+historyRoutes.post('/', requireAuth, async (req, res) => {
   try {
     const userId = req.userId!;
     const { query, specialty, location, results_count = 0 } = req.body;
@@ -55,7 +55,7 @@ historyRoutes.post('/', verifyStackAuth, async (req, res) => {
 });
 
 // Delete a history item
-historyRoutes.delete('/:id', verifyStackAuth, async (req, res) => {
+historyRoutes.delete('/:id', requireAuth, async (req, res) => {
   try {
     const userId = req.userId!;
     const { id } = req.params;
@@ -78,7 +78,7 @@ historyRoutes.delete('/:id', verifyStackAuth, async (req, res) => {
 });
 
 // Clear all history
-historyRoutes.delete('/', verifyStackAuth, async (req, res) => {
+historyRoutes.delete('/', requireAuth, async (req, res) => {
   try {
     const userId = req.userId!;
 
