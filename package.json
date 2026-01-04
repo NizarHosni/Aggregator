@@ -11,7 +11,7 @@
     "build": "echo Backend deployment - skipping frontend build",
     "build:frontend": "vite build",
     "build:server": "tsc -p server/tsconfig.json",
-    "start": "node dist/server/index.js",
+    "start": "tsx server/index.ts",
     "start:server": "node dist/server/index.js",
     "start:dev": "tsx server/index.ts",
     "lint": "eslint .",
