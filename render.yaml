@@ -1,5 +1,13 @@
 # Render.com Configuration for YoDoc Backend
-# This file configures the backend web service and PostgreSQL database
+# This file configures the backend web service ONLY (frontend is on Netlify)
+#
+# IMPORTANT: This file is ONLY used when deploying via "New Blueprint" in Render Dashboard
+# If you created the service manually, you MUST set these commands in the dashboard:
+#   - Build Command: npm install
+#   - Start Command: npm run start:dev
+#
+# This deployment does NOT build the frontend (no vite build)
+# Backend TypeScript code runs directly using tsx (in dependencies)
 
 services:
   # Backend Web Service (TypeScript/Node.js/Express)
@@ -11,12 +19,13 @@ services:
     nodeVersion: 18.x
     
     # Build Configuration
-    # Install all dependencies (tsx is in dependencies, so it will be available)
+    # Only installs dependencies - NO frontend build (vite is NOT run)
+    # tsx is in dependencies, so it's available for runtime
     buildCommand: npm install
     
     # Start Command
-    # Use tsx to run TypeScript directly (tsx is already in dependencies)
-    # Alternative: Use compiled JS: npm run start:server (requires build:server step)
+    # Runs TypeScript directly using tsx (no compilation needed)
+    # tsx is in dependencies, so it's available at runtime
     startCommand: npm run start:dev
     
     # Health Check Endpoint
