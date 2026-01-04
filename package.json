@@ -9,11 +9,16 @@
     "dev:client": "vite",
     "dev:server": "tsx watch server/index.ts",
     "build": "vite build",
-    "start": "tsx server/index.ts",
-    "start:server": "tsx server/index.ts",
+    "build:server": "tsc -p server/tsconfig.json",
+    "start": "node dist/server/index.js",
+    "start:server": "node dist/server/index.js",
+    "start:dev": "tsx server/index.ts",
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.9.4",

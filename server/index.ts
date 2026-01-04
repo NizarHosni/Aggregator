@@ -193,7 +193,7 @@ async function startServer() {
       console.log('   - Database-synced History & Favorites');
     });
 
-    // Graceful shutdown handler for Railway and other platforms
+    // Graceful shutdown handler for Render and other platforms
     const gracefulShutdown = (signal: string) => {
       console.log(`\n📛 Received ${signal}, shutting down gracefully...`);
       

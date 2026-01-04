@@ -1,0 +1,88 @@
+# Render.com Configuration for YoDoc Backend
+# This file configures the backend web service and PostgreSQL database
+
+services:
+  # Backend Web Service (TypeScript/Node.js/Express)
+  - type: web
+    name: yodoc-backend
+    env: node
+    plan: free
+    region: oregon
+    nodeVersion: 18.x
+    
+    # Build Configuration
+    # Step 1: Install all dependencies (including devDependencies for TypeScript)
+    buildCommand: npm install && npm run build:server
+    
+    # Start Command
+    # Step 2: Run the compiled JavaScript from the dist/server directory
+    startCommand: npm run start:server
+    
+    # Health Check Endpoint
+    # Render will ping this endpoint to ensure the service is healthy
+    healthCheckPath: /api/health
+    
+    # Database Connection
+    # Note: This project uses Neon PostgreSQL (serverless)
+    # Set DATABASE_URL in environment variables to your Neon database connection string
+    # Format: postgresql://user:password@host/database?sslmode=require
+    
+    # Environment Variables
+    # Set these in the Render dashboard under your service's "Environment" tab
+    envVars:
+      # Runtime Environment
+      - key: NODE_ENV
+        value: production
+      
+      # Note: PORT is automatically set by Render (default: 10000)
+      # Your code should use process.env.PORT || 3001
+      
+      # Database (Neon PostgreSQL - set your connection string from Neon dashboard)
+      # Get this from: https://console.neon.tech/
+      # - key: DATABASE_URL
+      #   sync: false
+      #   value: postgresql://user:password@host/database?sslmode=require
+      
+      # Authentication
+      # - key: JWT_SECRET
+      #   sync: false  # Set this manually in Render dashboard
+      
+      # API Keys (set these in Render dashboard)
+      # - key: OPENAI_API_KEY
+      #   sync: false
+      # - key: GOOGLE_PLACES_API_KEY
+      #   sync: false
+      
+      # Stripe Configuration (optional, for subscriptions)
+      # - key: STRIPE_SECRET_KEY
+      #   sync: false
+      # - key: STRIPE_PREMIUM_PRICE_ID
+      #   sync: false
+      # - key: STRIPE_PREMIUM_PRODUCT_ID
+      #   sync: false
+      # - key: STRIPE_WEBHOOK_SECRET
+      #   sync: false
+      
+      # Email Configuration (optional, for email sending)
+      # - key: SMTP_HOST
+      #   sync: false
+      # - key: SMTP_PORT
+      #   sync: false
+      # - key: SMTP_USER
+      #   sync: false
+      # - key: SMTP_PASS
+      #   sync: false
+      # - key: EMAIL_FROM
+      #   sync: false
+      
+      # Frontend URLs
+      # - key: FRONTEND_URL
+      #   value: https://yodoc.netlify.app
+      # - key: CLIENT_URL
+      #   value: https://yodoc.netlify.app
+      
+      # CORS Configuration
+      # - key: ALLOWED_ORIGINS
+      #   value: https://yodoc.netlify.app,http://localhost:5173
+    
+
