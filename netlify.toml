@@ -1,6 +1,6 @@
 # Netlify configuration
 [build]
-  command = "npm run build"
+  command = "npm run build:frontend"
   publish = "dist"
 
 [build.environment]
