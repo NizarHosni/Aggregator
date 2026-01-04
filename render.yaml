@@ -11,12 +11,13 @@ services:
     nodeVersion: 18.x
     
     # Build Configuration
-    # Step 1: Install all dependencies (including devDependencies for TypeScript)
-    buildCommand: npm install && npm run build:server
+    # Install all dependencies (tsx is in dependencies, so it will be available)
+    buildCommand: npm install
     
     # Start Command
-    # Step 2: Run the compiled JavaScript from the dist/server directory
-    startCommand: npm run start:server
+    # Use tsx to run TypeScript directly (tsx is already in dependencies)
+    # Alternative: Use compiled JS: npm run start:server (requires build:server step)
+    startCommand: npm run start:dev
     
     # Health Check Endpoint
     # Render will ping this endpoint to ensure the service is healthy
